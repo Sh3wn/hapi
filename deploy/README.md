@@ -71,6 +71,42 @@ The proxy itself is whatever serves `127.0.0.1:7890` on that machine; change it
 in `hapi-hub.service.d/proxy.conf`. `TUNWG_PROXY` wins, `HTTPS_PROXY` and
 `ALL_PROXY` are accepted as fallbacks.
 
+## Maintenance
+
+- **After upgrading hapi, re-apply the tunwg patch.** An upgrade replaces the
+  embedded `tunwg` binary under `~/.hapi/runtime/<version>/tools/tunwg/`, which
+  drops the proxy support:
+
+  ```bash
+  deploy/bin/build-tunwg-proxy.sh     # rebuild + install over the embedded binary
+  systemctl --user restart hapi-hub
+  ```
+
+  Symptom if this is skipped (direct egress can reach the relay's API but not
+  carry the tunnel): the hub prints `[Tunnel] Waiting for trusted TLS
+  certificate...` forever and never reaches `[Web] Public: https://...`, and
+  requests to `https://<label>.relay.hapi.run` die after ~5 s (the relay's own
+  dial timeout) or hang until the client gives up. `~/.hapi/runtime/.../tools/tunwg/tunwg.orig`
+  is the untouched binary, kept for comparison.
+
+- **After editing a unit in this repo**, copy it back and reload:
+
+  ```bash
+  cp -r deploy/systemd/user/* ~/.config/systemd/user/
+  systemctl --user daemon-reload
+  systemctl --user restart hapi-hub hapi-runner
+  ```
+
+- **Restart behaviour.** `hapi-runner.service` deliberately has no
+  `PartOf=hapi-hub.service`: with it, restarting the hub also stopped the
+  runner and terminated the sessions the runner had spawned (observed while
+  bringing this up). Restarting the hub now leaves the runner, its sessions and
+  terminal-owned sessions untouched; the runner reconnects its own socket.
+
+- **No credentials live in this repo.** `CLI_API_TOKEN` and `HAPI_API_URL` must
+  be provided per machine (environment or `~/.hapi/settings.json`); the proxy
+  address lives in `hapi-hub.service.d/proxy.conf`.
+
 ## Operating notes
 
 - The proxy must be up when the hub starts (or the tunnel retries until it is).
