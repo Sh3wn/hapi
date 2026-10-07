@@ -1,0 +1,18 @@
+[Unit]
+Description=HAPI Runner (remote session spawning)
+After=hapi-hub.service network-online.target
+Wants=hapi-hub.service
+PartOf=hapi-hub.service
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/hapi runner start-sync
+Environment=PATH=%h/.local/bin:%h/.bun/bin:%h/.nvm/versions/node/v25.2.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=HAPI_HOME=%h/.hapi
+Restart=always
+RestartSec=3
+KillMode=mixed
+TimeoutStopSec=15
+
+[Install]
+WantedBy=default.target

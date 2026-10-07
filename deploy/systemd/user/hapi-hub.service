@@ -1,0 +1,20 @@
+[Unit]
+Description=HAPI Hub (LAN web API; WSL mirrored networking)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/hapi hub --relay
+Environment=PATH=%h/.local/bin:%h/.bun/bin:%h/.nvm/versions/node/v25.2.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=HAPI_HOME=%h/.hapi
+Environment=HAPI_LISTEN_HOST=0.0.0.0
+Environment=HAPI_LISTEN_PORT=3006
+Environment=HAPI_RELAY_FORCE_TCP=true
+Restart=always
+RestartSec=3
+KillMode=mixed
+TimeoutStopSec=15
+
+[Install]
+WantedBy=default.target
