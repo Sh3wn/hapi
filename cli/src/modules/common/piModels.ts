@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { getAgentLaunchCommand } from '@/agent/agentLaunchCommand'
+import { resolvePiCommand } from '../../pi/utils/piExecutable'
 import { homedir } from 'node:os'
 import { parse } from 'node:path'
 import type { PiModelSummary, PiModelsResponse } from '@hapi/protocol/apiTypes'
@@ -40,16 +40,21 @@ const inflight = new Map<string, Promise<ListPiModelsForMachineResponse>>()
  * silently hide those models from the create-session form only.
  *
  * Discovery that cannot contribute models is still disabled (`--no-session`,
- * `--no-skills`, `--no-prompt-templates`, `--no-tools`): no session file is
- * written and no skill/prompt/tool loading is paid for. The probe still starts
- * faster than the old table probe (~2.1s vs ~1.6-2.4s measured, with a 60s
- * cache in front of it).
+ * `--no-skills`, `--no-tools`): no session file is written and no skill/tool
+ * loading is paid for. The probe still starts faster than the old table probe
+ * (~2.1s vs ~1.6-2.4s measured, with a 60s cache in front of it).
+ *
+ * `--no-prompt-templates` is deliberately NOT passed even though real Pi
+ * accepts it: the same agent also ships as `omp`
+ * (@oh-my-pi/pi-coding-agent, see resolvePiCommand) and that build rejects the
+ * flag with `unknown flag: --no-prompt-templates`, which would abort the probe
+ * and leave the machine without a Pi model list. Prompt templates cannot
+ * contribute models, so leaving them enabled only costs startup time.
  */
 const PI_PROBE_ARGS = [
     '--mode', 'rpc',
     '--no-session',
     '--no-skills',
-    '--no-prompt-templates',
     '--no-tools',
 ] as const
 
@@ -121,7 +126,7 @@ export function resolveProbeCwd(): string {
 
 function runPiModelsProbe(): Promise<ListPiModelsForMachineResponse> {
     return new Promise((resolve, reject) => {
-        const child = spawn(getAgentLaunchCommand('pi'), [...PI_PROBE_ARGS], {
+        const child = spawn(resolvePiCommand(), [...PI_PROBE_ARGS], {
             env: process.env,
             // Probe from the runner's cwd, falling back to home at a
             // filesystem root (see resolveProbeCwd).

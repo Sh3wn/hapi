@@ -9,6 +9,7 @@ import {
 import { getDefaultClaudeCodePath } from '@/claude/sdk/utils'
 import { resolveCodexCommand } from '@/codex/utils/codexExecutable'
 import { resolveDshAcpCommand } from '@/dsh/utils/dshBackend'
+import { resolvePiCommand } from '@/pi/utils/piExecutable'
 import { getAgentLaunchCommand, resolveExecutable } from './agentLaunchCommand'
 
 type LaunchEnvironment = Record<string, string | undefined>
@@ -34,6 +35,11 @@ function resolveLaunchSpec(agent: AgentFlavor, env: LaunchEnvironment, context: 
     }
     if (agent === 'dsh') {
         return resolveDshAcpCommand(env)
+    }
+    if (agent === 'pi') {
+        // Pi also ships as `omp`; resolve through the alias so the preflight
+        // agrees with the launcher instead of reporting a false not_found.
+        return { command: resolvePiCommand(env), args: [] }
     }
     return { command: getAgentLaunchCommand(agent, env), args: [] }
 }

@@ -7,7 +7,7 @@ import { registerLocalHandoffHandler } from '@/agent/localHandoff';
 import { createRunnerLifecycle, createModeChangeHandler, setControlledByUser } from '@/agent/runnerLifecycle';
 import { getInvokedCwd } from '@/utils/invokedCwd';
 import { PiTransport } from './piTransport';
-import { getAgentLaunchCommand } from '@/agent/agentLaunchCommand';
+import { resolvePiCommand } from './utils/piExecutable';
 import { PiSession } from './session';
 import { PiConversationHistory, PiHistoryRestoreError } from './conversationHistory';
 import { parsePiModels, parsePiCommands, PiRpcTimeoutError, sendPiRpcAndWait, wireTransportEvents } from './loop';
@@ -249,7 +249,7 @@ export async function runPi(opts: {
         transportArgs.push('--session', opts.resumeSessionId);
     }
     const transport = new PiTransport({
-        command: getAgentLaunchCommand('pi'),
+        command: resolvePiCommand(),
         args: transportArgs,
         cwd: workingDirectory,
         env: process.env,

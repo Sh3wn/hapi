@@ -26,6 +26,28 @@ describe('agent executable resolution', () => {
         })).toEqual({ agent: 'copilot', available: true })
     })
 
+    it('reports Pi as available when only the omp alias is installed', async () => {
+        const directory = await mkdtemp(join(tmpdir(), 'hapi-agent-path-'))
+        await makeExecutable(directory, 'omp')
+
+        expect(getAgentAvailability('pi', { PATH: directory })).toEqual({ agent: 'pi', available: true })
+    })
+
+    it('honors HAPI_PI_PATH and reports Pi as missing without a Pi binary', async () => {
+        const directory = await mkdtemp(join(tmpdir(), 'hapi-agent-path-'))
+        const custom = await makeExecutable(directory, 'pi-custom')
+
+        expect(getAgentAvailability('pi', { PATH: '', HAPI_PI_PATH: custom })).toEqual({
+            agent: 'pi',
+            available: true,
+        })
+        expect(getAgentAvailability('pi', { PATH: '' })).toEqual({
+            agent: 'pi',
+            available: false,
+            reason: 'not_found',
+        })
+    })
+
     it('uses PATHEXT when resolving Windows commands', () => {
         expect(executableCandidates('agent', {
             platform: 'win32',

@@ -42,13 +42,15 @@ export function executableCandidates(
     const platform = options.platform ?? process.platform
     const isWindows = platform === 'win32'
     const pathApi = isWindows ? win32 : posix
-    const cwd = options.cwd ?? process.cwd()
     const hasPathSeparator = command.includes('/') || command.includes('\\')
-    const commandPath = pathApi.isAbsolute(command)
-        ? command
-        : hasPathSeparator
-            ? pathApi.resolve(cwd, command)
-            : null
+    // process.cwd() throws when the working directory was deleted, and callers
+    // that resolve a bare command name never need it; only read it when a
+    // relative path actually has to be resolved against the current directory.
+    const commandPath = hasPathSeparator
+        ? pathApi.isAbsolute(command)
+            ? command
+            : pathApi.resolve(options.cwd ?? process.cwd(), command)
+        : null
 
     const extensions = isWindows && pathApi.extname(command) === ''
         ? (options.pathExt ?? process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD')
