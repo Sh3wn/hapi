@@ -2,7 +2,6 @@
 Description=HAPI Runner (remote session spawning)
 After=hapi-hub.service network-online.target
 Wants=hapi-hub.service
-PartOf=hapi-hub.service
 
 [Service]
 Type=simple

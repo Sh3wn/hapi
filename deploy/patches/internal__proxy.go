@@ -25,7 +25,12 @@ func proxyURL() *url.URL {
 		}
 		parsed, err := url.Parse(value)
 		if err != nil || parsed.Host == "" {
-			continue
+			// Accept scheme-less values such as "127.0.0.1:7890"; url.Parse
+			// reads those as scheme + opaque rather than host.
+			parsed, err = url.Parse("http://" + strings.TrimPrefix(value, "//"))
+			if err != nil || parsed.Host == "" {
+				continue
+			}
 		}
 		if parsed.Scheme == "" {
 			parsed.Scheme = "http"

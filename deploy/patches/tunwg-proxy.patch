@@ -1,9 +1,9 @@
 diff --git a/internal/proxy.go b/internal/proxy.go
 new file mode 100644
-index 0000000..a74b97e
+index 0000000..0c72f76
 --- /dev/null
 +++ b/internal/proxy.go
-@@ -0,0 +1,130 @@
+@@ -0,0 +1,135 @@
 +package internal
 +
 +import (
@@ -31,7 +31,12 @@ index 0000000..a74b97e
 +		}
 +		parsed, err := url.Parse(value)
 +		if err != nil || parsed.Host == "" {
-+			continue
++			// Accept scheme-less values such as "127.0.0.1:7890"; url.Parse
++			// reads those as scheme + opaque rather than host.
++			parsed, err = url.Parse("http://" + strings.TrimPrefix(value, "//"))
++			if err != nil || parsed.Host == "" {
++				continue
++			}
 +		}
 +		if parsed.Scheme == "" {
 +			parsed.Scheme = "http"
@@ -134,7 +139,226 @@ index 0000000..a74b97e
 +
 +	return bufferedConn{Conn: conn, reader: reader}, nil
 +}
-\ No newline at end of file
+diff --git a/internal/proxy_test.go b/internal/proxy_test.go
+new file mode 100644
+index 0000000..3b23d12
+--- /dev/null
++++ b/internal/proxy_test.go
+@@ -0,0 +1,214 @@
++package internal
++
++import (
++	"bufio"
++	"crypto/ecdsa"
++	"crypto/elliptic"
++	"crypto/rand"
++	"crypto/tls"
++	"crypto/x509"
++	"crypto/x509/pkix"
++	"io"
++	"math/big"
++	"net"
++	"strings"
++	"sync"
++	"testing"
++	"time"
++)
++
++func testCert(t *testing.T) (tls.Certificate, *x509.CertPool) {
++	t.Helper()
++	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
++	if err != nil {
++		t.Fatalf("generate key: %v", err)
++	}
++	template := x509.Certificate{
++		SerialNumber:          big.NewInt(1),
++		Subject:               pkix.Name{CommonName: "hapi.test"},
++		DNSNames:              []string{"hapi.test"},
++		NotBefore:             time.Now().Add(-time.Hour),
++		NotAfter:              time.Now().Add(time.Hour),
++		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
++		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
++		IsCA:                  true,
++		BasicConstraintsValid: true,
++	}
++	der, err := x509.CreateCertificate(rand.Reader, &template, &template, &key.PublicKey, key)
++	if err != nil {
++		t.Fatalf("create certificate: %v", err)
++	}
++	cert := tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}
++	pool := x509.NewCertPool()
++	parsed, err := x509.ParseCertificate(der)
++	if err != nil {
++		t.Fatalf("parse certificate: %v", err)
++	}
++	pool.AddCert(parsed)
++	return cert, pool
++}
++
++// startTLSOrigin runs a TLS server that echoes everything it receives and
++// returns its address plus the pool trusting its certificate.
++func startTLSOrigin(t *testing.T) (string, *x509.CertPool) {
++	t.Helper()
++	cert, pool := testCert(t)
++	listener, err := tls.Listen("tcp", "127.0.0.1:0", &tls.Config{Certificates: []tls.Certificate{cert}})
++	if err != nil {
++		t.Fatalf("listen: %v", err)
++	}
++	t.Cleanup(func() { listener.Close() })
++	go func() {
++		for {
++			conn, err := listener.Accept()
++			if err != nil {
++				return
++			}
++			go func() {
++				defer conn.Close()
++				_, _ = io.Copy(conn, conn)
++			}()
++		}
++	}()
++	return listener.Addr().String(), pool
++}
++
++// startConnectProxy runs a minimal HTTP CONNECT proxy and records the targets
++// it was asked for.
++func startConnectProxy(t *testing.T) (string, func() []string) {
++	t.Helper()
++	listener, err := net.Listen("tcp", "127.0.0.1:0")
++	if err != nil {
++		t.Fatalf("listen: %v", err)
++	}
++	t.Cleanup(func() { listener.Close() })
++
++	var mu sync.Mutex
++	var targets []string
++	go func() {
++		for {
++			conn, err := listener.Accept()
++			if err != nil {
++				return
++			}
++			go func() {
++				defer conn.Close()
++				reader := bufio.NewReader(conn)
++				line, err := reader.ReadString('\n')
++				if err != nil {
++					return
++				}
++				fields := strings.Fields(line)
++				if len(fields) < 2 {
++					return
++				}
++				target := fields[1]
++				mu.Lock()
++				targets = append(targets, target)
++				mu.Unlock()
++				for {
++					header, err := reader.ReadString('\n')
++					if err != nil {
++						return
++					}
++					if header == "\r\n" || header == "\n" {
++						break
++					}
++				}
++				if _, err := conn.Write([]byte("HTTP/1.1 200 Connection Established\r\n\r\n")); err != nil {
++					return
++				}
++				upstream, err := net.Dial("tcp", target)
++				if err != nil {
++					return
++				}
++				defer upstream.Close()
++				go func() { _, _ = io.Copy(upstream, reader) }()
++				_, _ = io.Copy(conn, upstream)
++			}()
++		}
++	}()
++	return listener.Addr().String(), func() []string {
++		mu.Lock()
++		defer mu.Unlock()
++		return append([]string(nil), targets...)
++	}
++}
++
++func echoThrough(t *testing.T, conn net.Conn) {
++	t.Helper()
++	payload := []byte("hello tunwg\n")
++	if _, err := conn.Write(payload); err != nil {
++		t.Fatalf("write: %v", err)
++	}
++	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
++	buf := make([]byte, len(payload))
++	if _, err := io.ReadFull(conn, buf); err != nil {
++		t.Fatalf("read: %v", err)
++	}
++	if string(buf) != string(payload) {
++		t.Fatalf("echo mismatch: got %q want %q", buf, payload)
++	}
++}
++
++func TestProxyURLPrecedence(t *testing.T) {
++	t.Setenv("TUNWG_PROXY", "")
++	t.Setenv("HTTPS_PROXY", "http://fallback.example:3128")
++	t.Setenv("ALL_PROXY", "socks5://ignored.example:1080")
++	got := proxyURL()
++	if got == nil || got.Host != "fallback.example:3128" {
++		t.Fatalf("expected HTTPS_PROXY fallback, got %v", got)
++	}
++
++	t.Setenv("TUNWG_PROXY", "127.0.0.1:7890") // no scheme
++	got = proxyURL()
++	if got == nil || got.Scheme != "http" || got.Host != "127.0.0.1:7890" {
++		t.Fatalf("expected TUNWG_PROXY to win with http scheme, got %v", got)
++	}
++
++	t.Setenv("TUNWG_PROXY", "")
++	t.Setenv("HTTPS_PROXY", "")
++	t.Setenv("ALL_PROXY", "")
++	if got := proxyURL(); got != nil {
++		t.Fatalf("expected no proxy, got %v", got)
++	}
++}
++
++func TestDialTLSDirect(t *testing.T) {
++	origin, pool := startTLSOrigin(t)
++	t.Setenv("TUNWG_PROXY", "")
++	t.Setenv("HTTPS_PROXY", "")
++	t.Setenv("ALL_PROXY", "")
++
++	conn, err := DialTLS(origin, &tls.Config{RootCAs: pool, ServerName: "hapi.test"})
++	if err != nil {
++		t.Fatalf("DialTLS: %v", err)
++	}
++	defer conn.Close()
++	echoThrough(t, conn)
++}
++
++func TestDialTLSViaHTTPProxy(t *testing.T) {
++	origin, pool := startTLSOrigin(t)
++	proxy, targets := startConnectProxy(t)
++	t.Setenv("TUNWG_PROXY", "http://"+proxy)
++
++	conn, err := DialTLS(origin, &tls.Config{RootCAs: pool, ServerName: "hapi.test"})
++	if err != nil {
++		t.Fatalf("DialTLS through proxy: %v", err)
++	}
++	defer conn.Close()
++	echoThrough(t, conn)
++
++	seen := targets()
++	if len(seen) != 1 || seen[0] != origin {
++		t.Fatalf("proxy saw %v, want CONNECT to %s", seen, origin)
++	}
++}
++
++func TestDialTCPRejectsUnsupportedProxyScheme(t *testing.T) {
++	t.Setenv("TUNWG_PROXY", "socks5://127.0.0.1:1080")
++	if _, err := dialTCP("127.0.0.1:1"); err == nil {
++		t.Fatal("expected an error for an unsupported proxy scheme")
++	}
++}
 diff --git a/listener.go b/listener.go
 index 90511ac..c105683 100644
 --- a/listener.go
