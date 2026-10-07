@@ -52,16 +52,20 @@ systemctl --user enable --now hapi-hub hapi-runner
 # 2. build the patched tunwg and install it where the hub looks for it:
 #    ~/.hapi/runtime/<hapi-version>/tools/tunwg/tunwg
 #    (the original is kept next to it as tunwg.orig)
-git clone --depth 1 https://github.com/tiann/tunwg.git ~/tunwg-src
-cp deploy/patches/{internal__proxy.go,listener.go.patched} /tmp/  # or use the script's copies
-cp deploy/patches/internal__proxy.go  ~/.hapi/patches/internal__proxy.go
-cp deploy/patches/listener.go.patched ~/.hapi/patches/listener.go.patched
-cp deploy/patches/tunwg-proxy.patch   ~/.hapi/patches/tunwg-proxy.patch
-install -m755 deploy/bin/build-tunwg-proxy.sh ~/.hapi/bin/build-tunwg-proxy.sh
-~/.hapi/bin/build-tunwg-proxy.sh v26.08.03+122a6d0   # requires Go >= 1.26
+#    Run this straight from a checkout of this repo: the script finds the
+#    patch files in deploy/patches/ itself.
+deploy/bin/build-tunwg-proxy.sh v26.08.03+122a6d0   # requires Go >= 1.26
 
-# 3. should the hub ever lose its own tunnel binaries, re-run step 2
+# 3. restart the hub to pick the binary up, then check the tunnel:
+systemctl --user restart hapi-hub
+journalctl --user -u hapi-hub -f | grep -E 'Public:|Tunnel\]'
 ```
+
+The script clones `tiann/tunwg` to `~/tunwg-src` when missing, checks out the
+release tag, applies `deploy/patches/`, builds with the Go toolchain in
+`~/.local/go-toolchain` (override with `TUNWG_SRC` / `HAPI_DEPLOY_PATCHES`), and
+installs the result. Re-run it after a hapi upgrade, which replaces the
+embedded tunwg binary.
 
 The proxy itself is whatever serves `127.0.0.1:7890` on that machine; change it
 in `hapi-hub.service.d/proxy.conf`. `TUNWG_PROXY` wins, `HTTPS_PROXY` and
