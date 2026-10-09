@@ -220,3 +220,9 @@ bun run build:web -- --base /<repo>/
 4. Open the static site, click the top-right Hub button on the login screen, and enter the hapi hub origin.
 
 Clear the hub override in the same dialog to return to same-origin behavior.
+
+This fork ships that path end to end: `.github/workflows/pages.yml` publishes
+`web/dist` as a GitHub Pages project site (Vite base from the Pages base path,
+`VITE_REQUIRE_HUB_URL=1`, no custom domain) and
+`deploy/systemd/user/hapi-hub.service.d/cors.conf` sets the hub's
+`CORS_ORIGINS` to the Pages origin. Adjust the origin there before deploying.

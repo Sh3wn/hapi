@@ -1,0 +1,58 @@
+name: Deploy Fork Web App to GitHub Pages
+
+# Fork counterpart of `webapp.yml`: the upstream workflow publishes to the
+# custom domain app.hapi.run, so it cannot be reused here. This one publishes
+# the same `web/dist` as a GitHub Pages *project* site
+# (https://<owner>.github.io/<repo>/) with no CNAME, and requires an explicit
+# hub URL at login because a standalone origin has no same-origin hub.
+
+on:
+    push:
+        branches:
+            - feat/pi-omp-alias
+        paths:
+            - 'web/**'
+            - 'shared/**'
+            - '.github/workflows/pages.yml'
+    workflow_dispatch:
+
+permissions:
+    contents: read
+    pages: write
+    id-token: write
+
+concurrency:
+    group: pages
+    cancel-in-progress: true
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: oven-sh/setup-bun@v2
+            - run: bun install --frozen-lockfile
+            - name: Setup Pages
+              id: pages
+              uses: actions/configure-pages@v5
+            - name: Build web app
+              env:
+                  VITE_REQUIRE_HUB_URL: '1'
+                  # Project sites are served from /<repo>/; user sites get '/'.
+                  VITE_BASE_URL: ${{ steps.pages.outputs.base_path }}/
+              run: bun run --cwd web build
+            - name: Upload artifact
+              uses: actions/upload-pages-artifact@v3
+              with:
+                  path: web/dist
+
+    deploy:
+        needs: build
+        runs-on: ubuntu-latest
+        environment:
+            name: github-pages
+            url: ${{ steps.deployment.outputs.page_url }}
+        steps:
+            - name: Deploy to GitHub Pages
+              id: deployment
+              uses: actions/deploy-pages@v4
