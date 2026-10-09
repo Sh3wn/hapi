@@ -35,11 +35,15 @@ jobs:
             - name: Setup Pages
               id: pages
               uses: actions/configure-pages@v5
+              with:
+                  # A fresh fork has no Pages site; create it (needs pages: write).
+                  enablement: true
             - name: Build web app
               env:
                   VITE_REQUIRE_HUB_URL: '1'
                   # Project sites are served from /<repo>/; user sites get '/'.
-                  VITE_BASE_URL: ${{ steps.pages.outputs.base_path }}/
+                  # Falls back to the repository name when the Pages API reports none.
+                  VITE_BASE_URL: ${{ steps.pages.outputs.base_path || format('/{0}', github.event.repository.name) }}/
               run: bun run --cwd web build
             - name: Upload artifact
               uses: actions/upload-pages-artifact@v3
