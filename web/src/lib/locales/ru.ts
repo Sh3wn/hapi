@@ -532,6 +532,8 @@ export default {
   'file.page.tab.preview': 'Предпросмотр',
   'file.page.missingPath': 'Путь к файлу не указан.',
   'file.page.emptyDirectory': 'Пустой каталог.',
+  'file.page.noChangesInDirectory': 'В этом каталоге нет изменений.',
+  'file.page.changesOnly': 'Только изменённые записи — без изменений скрыто: {n}.',
   'file.page.binary': 'Похоже, это бинарный файл. Его нельзя отобразить.',
   'file.page.imagePreviewAlt': 'Предпросмотр изображения {name}',
   'file.page.empty': 'Файл пуст.',

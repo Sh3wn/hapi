@@ -16,7 +16,8 @@ import { ImagePreview } from '@/components/ImagePreview'
 import { MarkdownRenderer } from '@/components/MarkdownRenderer'
 import { formatFileMetadata } from '@/lib/file-metadata'
 import { DEFAULT_DIRECTORY_SORT, sortDirectoryEntries } from '@/lib/directory-sort'
-import { parseDirectoryListing } from '@/lib/directory-listing'
+import { isPathInChangeSet, joinListedPath, parseDirectoryListing } from '@/lib/directory-listing'
+import { useGitStatusFiles } from '@/hooks/queries/useGitStatusFiles'
 import {
     getInitialMarkdownPreviewMode,
     isMarkdownFile,
@@ -261,6 +262,7 @@ export default function FilePage() {
         enabled: Boolean(api && sessionId && filePath)
     })
 
+    const gitStatus = useGitStatusFiles(api, sessionId)
     const fileQuery = useQuery({
         queryKey: queryKeys.sessionFile(sessionId, filePath),
         queryFn: async () => {
@@ -409,10 +411,23 @@ export default function FilePage() {
     // A directory (a changed submodule, or any path the user opened) has no file
     // contents: list its entries so the viewer behaves like a folder. Directories
     // are the trailing-slash lines the read RPC returns for them.
-    const directoryEntries = useMemo(() => {
+    const listedEntries = useMemo(() => {
         if (!isDirectory) return null
         return sortDirectoryEntries(parseDirectoryListing(decodedContent), DEFAULT_DIRECTORY_SORT, locale)
     }, [isDirectory, decodedContent, locale])
+    // This viewer is reached from the change list (a changed submodule, an
+    // untracked directory), so only entries that carry a change belong in it: a
+    // clean file next to a change is not part of "changes". Without a change set
+    // (git unavailable) the raw listing is the best answer.
+    const changedPaths = useMemo(() => new Set([
+        ...(gitStatus.status?.stagedFiles ?? []).map((file) => file.fullPath),
+        ...(gitStatus.status?.unstagedFiles ?? []).map((file) => file.fullPath),
+    ]), [gitStatus.status])
+    const directoryEntries = useMemo(() => {
+        if (!listedEntries || changedPaths.size === 0) return listedEntries
+        return listedEntries.filter((entry) => isPathInChangeSet(joinListedPath(filePath, entry.name), changedPaths))
+    }, [listedEntries, changedPaths, filePath])
+    const hiddenEntryCount = listedEntries && directoryEntries ? listedEntries.length - directoryEntries.length : 0
     const renderedMetadata = formatFileMetadata(
         directoryEntries ? undefined : fileContentResult?.size,
         fileContentResult?.modified,
@@ -543,7 +558,11 @@ export default function FilePage() {
                             ))}
                         </div>
                     ) : directoryEntries ? (
-                        <div className="text-sm text-[var(--app-hint)]">{t('file.page.emptyDirectory')}</div>
+                        <div className="text-sm text-[var(--app-hint)]">
+                            {listedEntries && listedEntries.length > 0
+                                ? t('file.page.noChangesInDirectory')
+                                : t('file.page.emptyDirectory')}
+                        </div>
                     ) : displayMode === 'file' ? (
                         imagePreviewUrl ? (
                             <ImagePreview
@@ -604,6 +623,11 @@ export default function FilePage() {
                     ) : (
                         <div className="text-sm text-[var(--app-hint)]">{t('file.page.noChanges')}</div>
                     )}
+                    {hiddenEntryCount > 0 ? (
+                        <div className="mt-3 text-xs text-[var(--app-hint)]">
+                            {t('file.page.changesOnly', { n: hiddenEntryCount })}
+                        </div>
+                    ) : null}
                 </div>
             </div>
         </div>

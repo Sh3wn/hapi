@@ -530,6 +530,8 @@ export default {
   'file.page.tab.preview': '预览',
   'file.page.missingPath': '未提供文件路径。',
   'file.page.emptyDirectory': '空目录。',
+  'file.page.noChangesInDirectory': '该目录下没有变更。',
+  'file.page.changesOnly': '只显示变更条目，已隐藏 {n} 个未变更项。',
   'file.page.binary': '该文件看起来是二进制文件，无法显示。',
   'file.page.imagePreviewAlt': '{name} 图片预览',
   'file.page.empty': '文件为空。',

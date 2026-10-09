@@ -532,6 +532,8 @@ export default {
   'file.page.tab.preview': 'Preview',
   'file.page.missingPath': 'No file path provided.',
   'file.page.emptyDirectory': 'Empty directory.',
+  'file.page.noChangesInDirectory': 'No changes in this directory.',
+  'file.page.changesOnly': 'Changed entries only — {n} unchanged hidden.',
   'file.page.binary': 'This looks like a binary file. It cannot be displayed.',
   'file.page.imagePreviewAlt': 'Image preview for {name}',
   'file.page.empty': 'File is empty.',
