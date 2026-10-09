@@ -15,6 +15,8 @@ import { decodeBase64, encodeBase64 } from '@/lib/utils'
 import { ImagePreview } from '@/components/ImagePreview'
 import { MarkdownRenderer } from '@/components/MarkdownRenderer'
 import { formatFileMetadata } from '@/lib/file-metadata'
+import { DEFAULT_DIRECTORY_SORT, sortDirectoryEntries } from '@/lib/directory-sort'
+import { parseDirectoryListing } from '@/lib/directory-listing'
 import {
     getInitialMarkdownPreviewMode,
     isMarkdownFile,
@@ -408,18 +410,9 @@ export default function FilePage() {
     // contents: list its entries so the viewer behaves like a folder. Directories
     // are the trailing-slash lines the read RPC returns for them.
     const directoryEntries = useMemo(() => {
-        if (!isDirectory || !decodedContent) return null
-        return decodedContent
-            .split('\n')
-            .map((line) => line.trim())
-            .filter((line) => line.length > 0)
-            .map((line) => line.endsWith('/')
-                ? { name: line.slice(0, -1), isDirectory: true }
-                : { name: line, isDirectory: false })
-            .sort((a, b) => (a.isDirectory === b.isDirectory
-                ? a.name.localeCompare(b.name)
-                : a.isDirectory ? -1 : 1))
-    }, [isDirectory, decodedContent])
+        if (!isDirectory) return null
+        return sortDirectoryEntries(parseDirectoryListing(decodedContent), DEFAULT_DIRECTORY_SORT, locale)
+    }, [isDirectory, decodedContent, locale])
     const renderedMetadata = formatFileMetadata(
         directoryEntries ? undefined : fileContentResult?.size,
         fileContentResult?.modified,
@@ -530,7 +523,7 @@ export default function FilePage() {
                         <div className="text-sm text-[var(--app-hint)]">{diffErrorMessage}</div>
                     ) : fileErrorMessage ? (
                         <div className="text-sm text-[var(--app-hint)]">{fileErrorMessage}</div>
-                    ) : directoryEntries ? (
+                    ) : directoryEntries && directoryEntries.length > 0 ? (
                         <div className="overflow-hidden rounded-md border border-[var(--app-border)]">
                             {directoryEntries.map((entry) => (
                                 <button
@@ -541,14 +534,16 @@ export default function FilePage() {
                                 >
                                     <FileIcon fileName={entry.name} size={16} />
                                     <span className="min-w-0 flex-1 truncate font-mono text-xs">
-                                        {entry.name}{entry.isDirectory ? '/' : ''}
+                                        {entry.name}{entry.type === 'directory' ? '/' : ''}
                                     </span>
-                                    {entry.isDirectory ? (
+                                    {entry.type === 'directory' ? (
                                         <span className="text-[var(--app-hint)]" aria-hidden="true">›</span>
                                     ) : null}
                                 </button>
                             ))}
                         </div>
+                    ) : directoryEntries ? (
+                        <div className="text-sm text-[var(--app-hint)]">{t('file.page.emptyDirectory')}</div>
                     ) : displayMode === 'file' ? (
                         imagePreviewUrl ? (
                             <ImagePreview
