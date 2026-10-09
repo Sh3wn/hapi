@@ -120,9 +120,12 @@ export function registerGitHandlers(rpcHandlerManager: RpcHandlerManager, workin
             return rpcError(fileError)
         }
 
+        // `--submodule=diff` expands a changed submodule (gitlink) into the inner
+        // file diffs; without it the viewer only gets the `Subproject commit`
+        // pointer lines for a directory path.
         const args = data.staged
-            ? ['diff', '--cached', '--no-ext-diff', '--', data.filePath]
-            : ['diff', '--no-ext-diff', '--', data.filePath]
+            ? ['diff', '--cached', '--no-ext-diff', '--submodule=diff', '--', data.filePath]
+            : ['diff', '--no-ext-diff', '--submodule=diff', '--', data.filePath]
         return await runGitCommand(args, resolved.cwd, data.timeout)
     })
 }

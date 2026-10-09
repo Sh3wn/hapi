@@ -1,5 +1,5 @@
 import { logger } from '@/ui/logger'
-import { readFile, stat, writeFile } from 'fs/promises'
+import { readFile, readdir, stat, writeFile } from 'fs/promises'
 import { createHash } from 'crypto'
 import { resolve } from 'path'
 import type { FileReadResponse, GeneratedImageResponse } from '@hapi/protocol/apiTypes'
@@ -45,6 +45,27 @@ export function registerFileHandlers(rpcHandlerManager: RpcHandlerManager, worki
         try {
             const resolvedPath = resolve(workingDirectory, data.path)
             const stats = await stat(resolvedPath)
+            if (stats.isDirectory()) {
+                // A directory path (changed submodule, gitlink, ...) reaches this
+                // handler from the files/changes viewer, which treats every row as a
+                // file. Reading it would only surface a raw EISDIR, and clients that
+                // surface a read failure above the diff (web `file.tsx`) would hide
+                // the directory's diff entirely. Answer with the entry listing, which
+                // is what a gitlink path can meaningfully show.
+                const entries = await readdir(resolvedPath, { withFileTypes: true })
+                const listing = entries
+                    .map((entry) => entry.isDirectory() ? `${entry.name}/` : entry.name)
+                    .sort((a, b) => a.localeCompare(b))
+                    .join('\n')
+                const content = listing ? `${listing}\n` : ''
+                return {
+                    success: true,
+                    content: Buffer.from(content, 'utf8').toString('base64'),
+                    size: Buffer.byteLength(content),
+                    modified: stats.mtime.getTime(),
+                    directory: true
+                }
+            }
             const buffer = await readFile(resolvedPath)
             const content = buffer.toString('base64')
             return {

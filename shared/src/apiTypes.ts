@@ -708,6 +708,8 @@ export type FileReadResponse = {
     size?: number
     modified?: number
     error?: string
+    /** The path is a directory (e.g. a gitlink/submodule); `content` is its entry listing. */
+    directory?: boolean
 }
 
 export type GeneratedImageResponse = {

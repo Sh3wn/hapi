@@ -46,4 +46,27 @@ describe('file RPC handlers', () => {
         expect(parsed.size).toBe(expectedStats.size)
         expect(parsed.modified).toBe(expectedStats.mtime.getTime())
     })
+
+    it('answers a directory path with its entry listing instead of EISDIR', async () => {
+        await mkdir(join(rootDir, 'sub', 'nested'), { recursive: true })
+        await writeFile(join(rootDir, 'sub', 'inner.txt'), 'x')
+
+        const response = await rpc.handleRequest({
+            method: 'session-test:readFile',
+            params: JSON.stringify({ path: 'sub' })
+        })
+        const parsed = JSON.parse(response) as {
+            success: boolean
+            content?: string
+            size?: number
+            directory?: boolean
+            error?: string
+        }
+
+        expect(parsed.success).toBe(true)
+        expect(parsed.directory).toBe(true)
+        expect(parsed.error).toBeUndefined()
+        expect(Buffer.from(parsed.content ?? '', 'base64').toString('utf8')).toBe('inner.txt\nnested/\n')
+        expect(parsed.size).toBe(Buffer.byteLength('inner.txt\nnested/\n'))
+    })
 })
