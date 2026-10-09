@@ -5,11 +5,14 @@ name: Deploy Fork Web App to GitHub Pages
 # the same `web/dist` as a GitHub Pages *project* site
 # (https://<owner>.github.io/<repo>/) with no CNAME, and requires an explicit
 # hub URL at login because a standalone origin has no same-origin hub.
+#
+# Deploys from the default branch only: the github-pages environment protects
+# its deployment branches to `main` by default.
 
 on:
     push:
         branches:
-            - feat/pi-omp-alias
+            - main
         paths:
             - 'web/**'
             - 'shared/**'

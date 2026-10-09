@@ -1,12 +1,10 @@
 name: Deploy Web App to GitHub Pages
 
 on:
-    push:
-        branches:
-            - main
-        paths:
-            - 'web/**'
-            - '.github/workflows/webapp.yml'
+    # Upstream publishes this workflow's artifact to the custom domain
+    # app.hapi.run. In this fork the same web build is published as a project
+    # site by pages.yml, so keeping the push trigger here would race that
+    # deployment and claim a domain this fork does not own.
     workflow_dispatch:
 
 permissions:
