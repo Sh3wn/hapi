@@ -301,3 +301,142 @@ describe('file search route', () => {
         })
     })
 })
+
+// A submodule is a directory in the work tree but one gitlink commit to the
+// session repo, so its own changes are invisible to git running in the session
+// root. These routes rebase the submodule's records onto the session root so
+// clients that cannot ask for the submodule root (hosted web, installed apps)
+// still see what changed inside it.
+describe('submodule-aware git routes', () => {
+    const session = {
+        id: 'session-1',
+        namespace: 'default',
+        active: true,
+        metadata: { path: '/repo' }
+    } as unknown as Session
+
+    const gitmodules = {
+        success: true,
+        content: Buffer.from('[submodule "sub"]\n\tpath = sub\n\turl = ./sub.git\n').toString('base64')
+    }
+
+    function engineWith(overrides: Partial<SyncEngine>): Partial<SyncEngine> {
+        return {
+            resolveSessionAccess: () => ({ ok: true as const, sessionId: 'session-1', session }),
+            readSessionFile: async () => gitmodules,
+            ...overrides
+        } as unknown as Partial<SyncEngine>
+    }
+
+    it('appends the submodule own status records, rebased onto the session root', async () => {
+        const engine = engineWith({
+            getGitStatus: async (_sessionId: string, cwd?: string) => cwd === '/repo'
+                ? {
+                    success: true,
+                    stdout: '# branch.head main\n1 .M S.MU 160000 160000 160000 aaa bbb sub\n'
+                }
+                : {
+                    success: true,
+                    stdout: '# branch.head EDA_contest\n'
+                        + '1 .M N... 100644 100644 100644 ccc ddd OpenROAD-GRT/README.md\n'
+                        + '2 .M N... 100644 100644 100644 eee fff R100 old.cpp\tnew.cpp\n'
+                        + '? PlacementTiming3D.cpp\n'
+                }
+        } as unknown as Partial<SyncEngine>)
+
+        const response = await buildApp(engine).request('/api/sessions/session-1/git-status')
+        const body = await response.json() as { success: boolean; stdout: string }
+
+        expect(body.success).toBe(true)
+        expect(body.stdout.split('\n').filter(Boolean)).toEqual([
+            '# branch.head main',
+            '1 .M S.MU 160000 160000 160000 aaa bbb sub',
+            '1 .M N... 100644 100644 100644 ccc ddd sub/OpenROAD-GRT/README.md',
+            '2 .M N... 100644 100644 100644 eee fff R100 sub/old.cpp\tsub/new.cpp',
+            '? sub/PlacementTiming3D.cpp'
+        ])
+    })
+
+    it('rebases the submodule numstat on the requested diff side', async () => {
+        const calls: Array<{ cwd?: string; staged?: boolean }> = []
+        const engine = engineWith({
+            getGitDiffNumstat: async (_sessionId: string, options: { cwd?: string; staged?: boolean }) => {
+                calls.push(options)
+                return options.cwd === '/repo'
+                    ? { success: true, stdout: '0\t0\tsub\n' }
+                    : { success: true, stdout: '2\t1\tOpenROAD-GRT/README.md\n' }
+            }
+        } as unknown as Partial<SyncEngine>)
+
+        const response = await buildApp(engine).request('/api/sessions/session-1/git-diff-numstat?staged=true')
+        const body = await response.json() as { success: boolean; stdout: string }
+
+        expect(body.stdout).toBe('0\t0\tsub\n2\t1\tsub/OpenROAD-GRT/README.md\n')
+        expect(calls).toEqual([
+            { cwd: '/repo', staged: true },
+            { cwd: '/repo/sub', staged: true }
+        ])
+    })
+
+    it('diffs a file inside a submodule from the submodule root', async () => {
+        const calls: Array<{ cwd?: string; filePath: string; staged?: boolean }> = []
+        const engine = engineWith({
+            getGitDiffFile: async (_sessionId: string, options: { cwd?: string; filePath: string; staged?: boolean }) => {
+                calls.push(options)
+                return { success: true, stdout: 'diff --git a/OpenROAD-GRT/README.md b/OpenROAD-GRT/README.md\n' }
+            }
+        } as unknown as Partial<SyncEngine>)
+
+        const response = await buildApp(engine).request('/api/sessions/session-1/git-diff-file?path=sub%2FOpenROAD-GRT%2FREADME.md')
+        const body = await response.json() as { success: boolean; stdout: string }
+
+        expect(body.stdout).toContain('diff --git a/OpenROAD-GRT/README.md')
+        expect(calls).toEqual([{ cwd: '/repo/sub', filePath: 'OpenROAD-GRT/README.md', staged: undefined }])
+    })
+
+    it('diffs the gitlink itself from the session root', async () => {
+        const calls: Array<{ cwd?: string; filePath: string; staged?: boolean }> = []
+        const engine = engineWith({
+            getGitDiffFile: async (_sessionId: string, options: { cwd?: string; filePath: string; staged?: boolean }) => {
+                calls.push(options)
+                return { success: true, stdout: 'Submodule sub contains modified content\n' }
+            }
+        } as unknown as Partial<SyncEngine>)
+
+        await buildApp(engine).request('/api/sessions/session-1/git-diff-file?path=sub')
+
+        expect(calls).toEqual([{ cwd: '/repo', filePath: 'sub', staged: undefined }])
+    })
+
+    it('leaves the parent records untouched when the session repo has no submodules', async () => {
+        let statusCalls = 0
+        const engine = engineWith({
+            readSessionFile: async () => ({ success: false, error: 'File not found' }),
+            getGitStatus: async () => {
+                statusCalls += 1
+                return { success: true, stdout: '# branch.head main\n' }
+            }
+        } as unknown as Partial<SyncEngine>)
+
+        const response = await buildApp(engine).request('/api/sessions/session-1/git-status')
+
+        expect(await response.json()).toEqual({ success: true, stdout: '# branch.head main\n' })
+        expect(statusCalls).toBe(1)
+    })
+
+    it('skips a submodule whose own status cannot be read', async () => {
+        const engine = engineWith({
+            getGitStatus: async (_sessionId: string, cwd?: string) => {
+                if (cwd === '/repo') {
+                    return { success: true, stdout: '1 .M S.MU 160000 160000 160000 aaa bbb sub\n' }
+                }
+                throw new Error('fatal: not a git repository')
+            }
+        } as unknown as Partial<SyncEngine>)
+
+        const response = await buildApp(engine).request('/api/sessions/session-1/git-status')
+        const body = await response.json() as { success: boolean; stdout: string }
+
+        expect(body).toEqual({ success: true, stdout: '1 .M S.MU 160000 160000 160000 aaa bbb sub\n' })
+    })
+})
