@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useParams, useSearch } from '@tanstack/react-router'
+import { useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import type { GitCommandResponse } from '@/types/api'
 import { FileIcon } from '@/components/FileIcon'
 import { CopyIcon, CheckIcon, WrapIcon } from '@/components/icons'
@@ -11,7 +11,7 @@ import { formatDiffError, formatReadFileError } from '@/lib/files-i18n'
 import { queryKeys } from '@/lib/query-keys'
 import { langAlias, useShikiHighlighter } from '@/lib/shiki'
 import { useTranslation } from '@/lib/use-translation'
-import { decodeBase64 } from '@/lib/utils'
+import { decodeBase64, encodeBase64 } from '@/lib/utils'
 import { ImagePreview } from '@/components/ImagePreview'
 import { MarkdownRenderer } from '@/components/MarkdownRenderer'
 import { formatFileMetadata } from '@/lib/file-metadata'
@@ -298,12 +298,14 @@ export default function FilePage() {
         () => (decodedContent ? getUtf8ByteLength(decodedContent) : 0),
         [decodedContent]
     )
+    const isDirectory = fileContentResult?.directory === true
     const canCopyContent = fileContentResult?.success === true
+        && !isDirectory
         && !binaryFile
         && decodedContent.length > 0
         && contentSizeBytes <= MAX_COPYABLE_FILE_BYTES
 
-    const canDownload = fileContentResult?.success === true && Boolean(fileContentResult.content)
+    const canDownload = fileContentResult?.success === true && !isDirectory && Boolean(fileContentResult.content)
 
     const [displayMode, setDisplayMode] = useState<'diff' | 'file'>('diff')
     const { codeWrap, setCodeWrap } = useCodeWrap()
@@ -358,6 +360,29 @@ export default function FilePage() {
         persistMarkdownPreviewMode(mode)
     }
 
+    const navigate = useNavigate()
+    // Opening an entry of a directory listing is the same viewer page one level
+    // deeper: files show their diff/contents, directories list their own entries.
+    const openDirectoryEntry = useCallback((name: string) => {
+        const base = filePath.replace(/\/+$/, '')
+        navigate({
+            to: '/sessions/$sessionId/file',
+            params: { sessionId },
+            search: {
+                path: encodeBase64(base ? `${base}/${name}` : name),
+                ...(staged !== undefined ? { staged } : {})
+            }
+        })
+    }, [filePath, navigate, sessionId, staged])
+
+    // A different path is a different document. Directories open as folders (their
+    // entry listing, with the diff of their contents one chip away); files open on
+    // the diff, and the effect below still falls back to the file view when the
+    // path has no diff at all.
+    useEffect(() => {
+        setDisplayMode(isDirectory ? 'file' : 'diff')
+    }, [filePath, isDirectory])
+
     useEffect(() => {
         if (imageMimeType) {
             setDisplayMode('file')
@@ -370,7 +395,7 @@ export default function FilePage() {
         if (diffFailed) {
             setDisplayMode('file')
         }
-    }, [diffSuccess, diffFailed, diffContent, imageMimeType])
+    }, [diffSuccess, diffFailed, diffContent, imageMimeType, filePath])
 
     const loading = diffQuery.isLoading || fileQuery.isLoading
     const fileError = fileContentResult && !fileContentResult.success
@@ -379,7 +404,27 @@ export default function FilePage() {
     const missingPath = !filePath
     const diffErrorMessage = diffError ? formatDiffError(diffError, t) : null
     const fileErrorMessage = fileError ? formatReadFileError(fileError, t) : null
-    const fileMetadata = formatFileMetadata(fileContentResult?.size, fileContentResult?.modified, locale)
+    // A directory (a changed submodule, or any path the user opened) has no file
+    // contents: list its entries so the viewer behaves like a folder. Directories
+    // are the trailing-slash lines the read RPC returns for them.
+    const directoryEntries = useMemo(() => {
+        if (!isDirectory || !decodedContent) return null
+        return decodedContent
+            .split('\n')
+            .map((line) => line.trim())
+            .filter((line) => line.length > 0)
+            .map((line) => line.endsWith('/')
+                ? { name: line.slice(0, -1), isDirectory: true }
+                : { name: line, isDirectory: false })
+            .sort((a, b) => (a.isDirectory === b.isDirectory
+                ? a.name.localeCompare(b.name)
+                : a.isDirectory ? -1 : 1))
+    }, [isDirectory, decodedContent])
+    const renderedMetadata = formatFileMetadata(
+        directoryEntries ? undefined : fileContentResult?.size,
+        fileContentResult?.modified,
+        locale
+    )
 
     return (
         <div className="flex h-full min-h-0 flex-col">
@@ -394,7 +439,7 @@ export default function FilePage() {
                     </button>
                     <div className="min-w-0 flex-1">
                         <div className="truncate font-semibold">{fileName}</div>
-                        <div className="truncate text-xs text-[var(--app-hint)]">{fileMetadata ?? (filePath || t('file.page.unknownPath'))}</div>
+                        <div className="truncate text-xs text-[var(--app-hint)]">{renderedMetadata ?? (filePath || t('file.page.unknownPath'))}</div>
                     </div>
                 </div>
             </div>
@@ -485,6 +530,25 @@ export default function FilePage() {
                         <div className="text-sm text-[var(--app-hint)]">{diffErrorMessage}</div>
                     ) : fileErrorMessage ? (
                         <div className="text-sm text-[var(--app-hint)]">{fileErrorMessage}</div>
+                    ) : directoryEntries ? (
+                        <div className="overflow-hidden rounded-md border border-[var(--app-border)]">
+                            {directoryEntries.map((entry) => (
+                                <button
+                                    key={entry.name}
+                                    type="button"
+                                    onClick={() => openDirectoryEntry(entry.name)}
+                                    className="flex w-full items-center gap-2 border-b border-[var(--app-divider)] px-3 py-2 text-left transition-colors last:border-b-0 hover:bg-[var(--app-subtle-bg)]"
+                                >
+                                    <FileIcon fileName={entry.name} size={16} />
+                                    <span className="min-w-0 flex-1 truncate font-mono text-xs">
+                                        {entry.name}{entry.isDirectory ? '/' : ''}
+                                    </span>
+                                    {entry.isDirectory ? (
+                                        <span className="text-[var(--app-hint)]" aria-hidden="true">›</span>
+                                    ) : null}
+                                </button>
+                            ))}
+                        </div>
                     ) : displayMode === 'file' ? (
                         imagePreviewUrl ? (
                             <ImagePreview
