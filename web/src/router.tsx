@@ -73,6 +73,7 @@ import SettingsAboutPage from '@/routes/settings/about'
 import SettingsStoragePage from '@/routes/settings/storage'
 import SettingsUsagePage from '@/routes/settings/usage'
 import SharePage from '@/routes/share'
+import { routerBasepathFromBase } from '@/lib/routerBase'
 import { retargetSharePendingTransfer, setSharePendingTransfer } from '@/lib/sharePendingState'
 import { deleteShareTransfer, parseShareSearch } from '@/lib/shareTransfer'
 
@@ -1299,6 +1300,9 @@ export function createAppRouter(history?: RouterHistory) {
     return createRouter({
         routeTree,
         history,
+        // Sub-path deployments (GitHub Pages project sites) need the prefix
+        // stripped before route matching; see `routerBasepathFromBase`.
+        basepath: routerBasepathFromBase(import.meta.env.BASE_URL),
         scrollRestoration: true,
         getScrollRestorationKey,
     })
