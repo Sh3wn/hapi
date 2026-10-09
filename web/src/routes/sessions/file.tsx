@@ -479,12 +479,12 @@ export default function FilePage() {
                         <div className="text-sm text-[var(--app-hint)]">{t('file.page.missingPath')}</div>
                     ) : loading ? (
                         <FileContentSkeleton label={t('loading.file')} />
-                    ) : fileErrorMessage ? (
-                        <div className="text-sm text-[var(--app-hint)]">{fileErrorMessage}</div>
                     ) : displayMode === 'diff' && diffContent ? (
                         <DiffDisplay diffContent={diffContent} />
                     ) : displayMode === 'diff' && diffError ? (
                         <div className="text-sm text-[var(--app-hint)]">{diffErrorMessage}</div>
+                    ) : fileErrorMessage ? (
+                        <div className="text-sm text-[var(--app-hint)]">{fileErrorMessage}</div>
                     ) : displayMode === 'file' ? (
                         imagePreviewUrl ? (
                             <ImagePreview
