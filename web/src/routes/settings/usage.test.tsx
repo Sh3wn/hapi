@@ -52,7 +52,8 @@ describe('SettingsUsagePage', () => {
     })
 
     it('drops a range the hub ignored instead of relabelling its numbers', async () => {
-        // An older hub answers any unknown range with its 7 day default.
+        // A hub that applies the range echoes it; this one answers today's
+        // request with its 7 day window.
         getUsageSummary.mockImplementation(async () => ({
             range: { key: '7d', from: 1, to: 2 },
             totals: bucket('totals', 999).valueOf() as never,
@@ -70,5 +71,30 @@ describe('SettingsUsagePage', () => {
         await waitFor(() => expect(screen.getByText(/does not support that range/i)).toBeInTheDocument())
         await waitFor(() => expect(screen.queryByRole('radio', { name: 'Today' })).not.toBeInTheDocument())
         expect(screen.getByRole('radio', { name: '7 days' })).toHaveAttribute('aria-checked', 'true')
+    })
+
+    it('treats an echo-less hub as legacy: today is dropped, the day windows stay', async () => {
+        // Pre-echo hubs send no `range.key` and ignore `range=today`.
+        getUsageSummary.mockImplementation(async () => ({
+            range: { from: 1, to: 2 },
+            totals: bucket('totals', 999).valueOf() as never,
+            daily: [bucket('2026-10-10', 999)],
+            byAgent: [],
+            byModel: [],
+            updatedAt: 2,
+        }))
+
+        renderPage()
+
+        const today = await screen.findByRole('radio', { name: 'Today' })
+        today.click()
+
+        await waitFor(() => expect(screen.queryByRole('radio', { name: 'Today' })).not.toBeInTheDocument())
+        expect(screen.getByRole('radio', { name: '7 days' })).toHaveAttribute('aria-checked', 'true')
+
+        // The legacy windows are unaffected: selecting 30 days must stick.
+        screen.getByRole('radio', { name: '30 days' }).click()
+        await waitFor(() => expect(screen.getByRole('radio', { name: '30 days' })).toHaveAttribute('aria-checked', 'true'))
+        expect(screen.getByRole('radio', { name: '7 days' })).toBeInTheDocument()
     })
 })

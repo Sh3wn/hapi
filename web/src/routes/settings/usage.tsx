@@ -9,6 +9,8 @@ import { useTranslation } from '@/lib/use-translation'
 
 type UsageRange = 'today' | '7d' | '30d' | 'all'
 const RANGE_OPTIONS: UsageRange[] = ['today', '7d', '30d', 'all']
+/** Ranges a hub without the range echo predates: it silently falls back to 7d for anything else. */
+const LEGACY_RANGES: UsageRange[] = ['7d', '30d', 'all']
 
 function formatTokens(value: number): string {
     if (value < 1000) return value.toLocaleString()
@@ -64,12 +66,17 @@ export default function SettingsUsagePage() {
         refetchOnWindowFocus: false,
         retry: false
     })
-    const appliedRange = query.data?.range.key
+    // The hub echoes the range it applied. No echo means a hub that predates the
+    // range, which answers such a request with its 7 day default — drop the
+    // option rather than label those numbers as the requested range.
     useEffect(() => {
-        if (!appliedRange || appliedRange === range) return
+        if (!query.data) return
+        const applied = query.data.range.key
+        const supported = applied === undefined ? LEGACY_RANGES.includes(range) : applied === range
+        if (supported) return
         setUnsupportedRanges((previous) => previous.includes(range) ? previous : [...previous, range])
-        setRange(appliedRange)
-    }, [appliedRange, range])
+        setRange(applied ?? '7d')
+    }, [query.data, range])
     const rangeOptions = RANGE_OPTIONS.filter((option) => !unsupportedRanges.includes(option))
     const maxDaily = useMemo(() => Math.max(...(query.data?.daily.map((row) => row.totalTokens) ?? [0]), 1), [query.data?.daily])
     // `daily` already carries the local calendar day the hub bucketed with the
