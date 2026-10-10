@@ -677,9 +677,13 @@ export function ComposerButtons(props: {
 
     return (
         <div className="flex shrink-0 items-center gap-1 px-2 pb-2">
+            {/* `overflow-x-auto` makes the scroller clip vertically too, which cut
+                the 2px the counter badge and FUE dot overhang above their buttons;
+                `pt-0.5` keeps that overhang inside the clip box while `-mt-0.5`
+                leaves the toolbar where it was. */}
             <div
                 data-testid="composer-toolbar-items"
-                className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto pt-0.5 -mt-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                 style={{ justifyContent: toolbarJustifyContent }}
             >
                 <OrderedToolbarItems layout={effectiveLayout}>
