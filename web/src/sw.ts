@@ -9,6 +9,7 @@ import {
     putShareTransfer,
 } from './lib/shareTransfer'
 import { shareTargetPathname } from './lib/sharePath'
+import { resolveNotificationUrl } from './lib/notificationTarget'
 
 const sharePath = shareTargetPathname()
 
@@ -117,8 +118,8 @@ self.addEventListener('push', (event) => {
 
     const title = payload.title || 'HAPI'
     const body = payload.body ?? ''
-    const icon = payload.icon ?? '/pwa-192x192.png'
-    const badge = payload.badge ?? '/pwa-64x64.png'
+    const icon = resolveNotificationUrl(payload.icon, self.registration.scope, 'pwa-192x192.png')
+    const badge = resolveNotificationUrl(payload.badge, self.registration.scope, 'pwa-64x64.png')
     const data = payload.data
     const tag = payload.tag
 
@@ -136,8 +137,9 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
     event.notification.close()
     const data = event.notification.data as { url?: string } | undefined
-    const url = data?.url ?? '/'
-    event.waitUntil(self.clients.openWindow(url))
+    // The hub sends app-relative paths; resolve them against the deployment's
+    // base so a sub-path install opens the session instead of the site root.
+    event.waitUntil(self.clients.openWindow(resolveNotificationUrl(data?.url, self.registration.scope)))
 })
 
 // Web Share Target — manifest declares POST /share, Android Chrome posts a
