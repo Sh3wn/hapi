@@ -4,6 +4,7 @@ import type { UsageSummaryBucket } from '@hapi/protocol/apiTypes'
 import { SettingsPageContent, SettingsRow, SettingsSection } from '@/components/settings/SettingsPrimitives'
 import { useAppContext } from '@/lib/app-context'
 import { queryKeys } from '@/lib/query-keys'
+import { usageDayKey } from '@/lib/usage-day'
 import { useTranslation } from '@/lib/use-translation'
 
 type UsageRange = '7d' | '30d' | 'all'
@@ -60,6 +61,13 @@ export default function SettingsUsagePage() {
         retry: false
     })
     const maxDaily = useMemo(() => Math.max(...(query.data?.daily.map((row) => row.totalTokens) ?? [0]), 1), [query.data?.daily])
+    // `daily` already carries the local calendar day the hub bucketed with the
+    // same time zone, so today is a lookup rather than a separate request.
+    const todayKey = useMemo(() => usageDayKey(Date.now(), timeZone), [timeZone])
+    const today = useMemo(
+        () => query.data?.daily.find((row) => row.key === todayKey) ?? null,
+        [query.data?.daily, todayKey]
+    )
     const cacheHitRate = query.data && query.data.totals.inputTokens > 0
         ? `${((query.data.totals.cacheReadTokens / query.data.totals.inputTokens) * 100).toFixed(1)}%`
         : '0%'
@@ -87,6 +95,7 @@ export default function SettingsUsagePage() {
                 <>
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                         {[
+                            ['settings.usage.today', today?.totalTokens ?? 0],
                             ['settings.usage.total', query.data.totals.totalTokens],
                             ['settings.usage.uncached', query.data.totals.uncachedTokens],
                             ['settings.usage.input', query.data.totals.inputTokens],

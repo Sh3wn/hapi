@@ -807,6 +807,7 @@ export default {
   'settings.usage.loading': '正在加载 Token 用量…',
   'settings.usage.error': '无法加载 Token 用量',
   'settings.usage.empty': '此范围内没有记录到 Token 用量。',
+  'settings.usage.today': '今日 Token（含缓存）',
   'settings.usage.total': '处理 Token（含缓存）',
   'settings.usage.uncached': '非缓存 Token',
   'settings.usage.input': '输入 Token（含缓存）',

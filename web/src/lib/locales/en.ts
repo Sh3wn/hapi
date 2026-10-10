@@ -809,6 +809,7 @@ export default {
   'settings.usage.loading': 'Loading token usage…',
   'settings.usage.error': 'Unable to load token usage',
   'settings.usage.empty': 'No token usage recorded for this range.',
+  'settings.usage.today': 'Today (cache included)',
   'settings.usage.total': 'Processed tokens (cache included)',
   'settings.usage.uncached': 'Non-cached tokens',
   'settings.usage.input': 'Input tokens (includes cache)',

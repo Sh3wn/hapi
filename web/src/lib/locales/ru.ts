@@ -811,6 +811,7 @@ export default {
   'settings.usage.loading': 'Загрузка расхода токенов…',
   'settings.usage.error': 'Не удалось загрузить расход токенов',
   'settings.usage.empty': 'За этот период расход токенов не зафиксирован.',
+  'settings.usage.today': 'Сегодня (с учётом кэша)',
   'settings.usage.total': 'Обработано токенов (с учётом кэша)',
   'settings.usage.uncached': 'Токены без кэша',
   'settings.usage.input': 'Входные токены (включая кэш)',
