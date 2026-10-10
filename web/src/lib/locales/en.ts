@@ -804,6 +804,7 @@ export default {
   'settings.usage.description': 'Tokens processed while agents are managed by HAPI. Imported earlier transcript usage is excluded; costs are not included.',
   'settings.usage.range.label': 'Usage range',
   'settings.usage.range.today': 'Today',
+  'settings.usage.range.unsupported': 'This hub does not support that range yet.',
   'settings.usage.range.7d': '7 days',
   'settings.usage.range.30d': '30 days',
   'settings.usage.range.all': 'All time',

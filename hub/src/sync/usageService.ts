@@ -1,4 +1,4 @@
-import type { UsageSummaryBucket, UsageSummaryResponse } from '@hapi/protocol/apiTypes'
+import type { UsageSummaryBucket, UsageSummaryRange, UsageSummaryResponse } from '@hapi/protocol/apiTypes'
 import type { StoredMessage, StoredSession } from '../store'
 import type { UsageEvent } from '../store/usage'
 import type { Store } from '../store'
@@ -387,6 +387,14 @@ export function getUsageSummary(
     // the same day key the daily buckets use so the boundary is local midnight,
     // DST included. It stays a null `from` only for `all`.
     const todayKey = range === 'today' ? dayKey(now, dayFormatter) : null
+    // Echo the range that was actually applied: a hub that predates a range
+    // answers with its default, and the client must not label those numbers as
+    // the requested range.
+    const appliedRange: UsageSummaryRange = range === '30d'
+        ? '30d'
+        : range === 'all'
+            ? 'all'
+            : todayKey !== null ? 'today' : '7d'
     const days = range === '30d' ? 30 : range === 'all' || todayKey !== null ? null : 7
     const from = todayKey !== null
         ? startOfDay(now, timeZone)
@@ -485,7 +493,7 @@ export function getUsageSummary(
         .sort((a, b) => b.totalTokens - a.totalTokens)
 
     return {
-        range: { from, to: now },
+        range: { key: appliedRange, from, to: now },
         totals: { ...totals, sessions: sessionsWithUsage.size },
         daily: Array.from(daily.entries())
             .map(([key, value]) => toBucket(key, value))

@@ -941,6 +941,11 @@ describe('usage service', () => {
         }, now - 20 * 24 * 60 * 60 * 1000)
 
         expect(getUsageSummary(store, 'default', '7d').totals.requests).toBe(1)
+        // The applied range is echoed so clients can spot a hub that ignored one.
+        expect(getUsageSummary(store, 'default', '7d').range.key).toBe('7d')
+        expect(getUsageSummary(store, 'default', 'today').range.key).toBe('today')
+        expect(getUsageSummary(store, 'default', 'all').range.key).toBe('all')
+        expect(getUsageSummary(store, 'default', 'nonsense').range.key).toBe('7d')
         expect(getUsageSummary(store, 'default', '30d').totals.requests).toBe(2)
         expect(getUsageSummary(store, 'default', undefined).totals.requests).toBe(1)
         expect(getUsageSummary(store, 'default', 'all').range.from).toBeNull()

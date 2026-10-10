@@ -802,6 +802,7 @@ export default {
   'settings.usage.description': '统计 Agent 由 HAPI 管理期间处理的 Token；不含导入前的历史会话用量和费用估算。',
   'settings.usage.range.label': '用量范围',
   'settings.usage.range.today': '今天',
+  'settings.usage.range.unsupported': '当前 hub 还不支持该区间。',
   'settings.usage.range.7d': '近 7 天',
   'settings.usage.range.30d': '近 30 天',
   'settings.usage.range.all': '全部时间',

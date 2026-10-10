@@ -988,8 +988,13 @@ export type UsageSummaryBucket = {
     requests: number
 }
 
+/** Ranges the usage summary can be restricted to. */
+export type UsageSummaryRange = 'today' | '7d' | '30d' | 'all'
+
 export type UsageSummaryResponse = {
     range: {
+        /** The range the hub actually applied; older hubs omit it or answer 7d. */
+        key?: UsageSummaryRange
         from: number | null
         to: number | null
     }

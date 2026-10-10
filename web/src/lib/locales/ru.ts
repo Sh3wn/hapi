@@ -806,6 +806,7 @@ export default {
   'settings.usage.description': 'Токены, обработанные при управлении агентами через HAPI. Ранее импортированные расшифровки не учитываются; стоимость не входит.',
   'settings.usage.range.label': 'Период',
   'settings.usage.range.today': 'Сегодня',
+  'settings.usage.range.unsupported': 'Этот hub пока не поддерживает такой период.',
   'settings.usage.range.7d': '7 дней',
   'settings.usage.range.30d': '30 дней',
   'settings.usage.range.all': 'Всё время',

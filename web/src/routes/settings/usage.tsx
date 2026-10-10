@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { UsageSummaryBucket } from '@hapi/protocol/apiTypes'
 import { SettingsPageContent, SettingsRow, SettingsSection } from '@/components/settings/SettingsPrimitives'
@@ -8,6 +8,7 @@ import { usageDayKey } from '@/lib/usage-day'
 import { useTranslation } from '@/lib/use-translation'
 
 type UsageRange = 'today' | '7d' | '30d' | 'all'
+const RANGE_OPTIONS: UsageRange[] = ['today', '7d', '30d', 'all']
 
 function formatTokens(value: number): string {
     if (value < 1000) return value.toLocaleString()
@@ -48,6 +49,9 @@ export default function SettingsUsagePage() {
     const { api } = useAppContext()
     const { t } = useTranslation()
     const [range, setRange] = useState<UsageRange>('7d')
+    // A hub that predates a range ignores it and answers with its default; keep
+    // those options out of the picker instead of labelling the numbers wrongly.
+    const [unsupportedRanges, setUnsupportedRanges] = useState<UsageRange[]>([])
     const [timeZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC')
     const query = useQuery({
         queryKey: queryKeys.usageSummary(range, timeZone),
@@ -60,6 +64,13 @@ export default function SettingsUsagePage() {
         refetchOnWindowFocus: false,
         retry: false
     })
+    const appliedRange = query.data?.range.key
+    useEffect(() => {
+        if (!appliedRange || appliedRange === range) return
+        setUnsupportedRanges((previous) => previous.includes(range) ? previous : [...previous, range])
+        setRange(appliedRange)
+    }, [appliedRange, range])
+    const rangeOptions = RANGE_OPTIONS.filter((option) => !unsupportedRanges.includes(option))
     const maxDaily = useMemo(() => Math.max(...(query.data?.daily.map((row) => row.totalTokens) ?? [0]), 1), [query.data?.daily])
     // `daily` already carries the local calendar day the hub bucketed with the
     // same time zone, so today is a lookup rather than a separate request.
@@ -75,7 +86,7 @@ export default function SettingsUsagePage() {
     return (
         <SettingsPageContent description={t('settings.usage.description')}>
             <div className="inline-flex overflow-hidden rounded-lg border border-[var(--app-border)]" role="radiogroup" aria-label={t('settings.usage.range.label')}>
-                {(['today', '7d', '30d', 'all'] as const).map((option) => (
+                {rangeOptions.map((option) => (
                     <button
                         key={option}
                         type="button"
@@ -89,6 +100,9 @@ export default function SettingsUsagePage() {
                 ))}
             </div>
 
+            {unsupportedRanges.length > 0 ? (
+                <div className="text-xs text-[var(--app-hint)]">{t('settings.usage.range.unsupported')}</div>
+            ) : null}
             {query.isLoading ? <SettingsSection><SettingsRow label={t('settings.usage.loading')} /></SettingsSection> : null}
             {query.error ? <SettingsSection><SettingsRow label={t('settings.usage.error')} description={query.error instanceof Error ? query.error.message : undefined} /></SettingsSection> : null}
             {query.data ? (
