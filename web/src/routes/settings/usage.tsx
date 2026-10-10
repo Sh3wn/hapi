@@ -7,7 +7,7 @@ import { queryKeys } from '@/lib/query-keys'
 import { usageDayKey } from '@/lib/usage-day'
 import { useTranslation } from '@/lib/use-translation'
 
-type UsageRange = '7d' | '30d' | 'all'
+type UsageRange = 'today' | '7d' | '30d' | 'all'
 
 function formatTokens(value: number): string {
     if (value < 1000) return value.toLocaleString()
@@ -75,7 +75,7 @@ export default function SettingsUsagePage() {
     return (
         <SettingsPageContent description={t('settings.usage.description')}>
             <div className="inline-flex overflow-hidden rounded-lg border border-[var(--app-border)]" role="radiogroup" aria-label={t('settings.usage.range.label')}>
-                {(['7d', '30d', 'all'] as const).map((option) => (
+                {(['today', '7d', '30d', 'all'] as const).map((option) => (
                     <button
                         key={option}
                         type="button"
@@ -95,7 +95,9 @@ export default function SettingsUsagePage() {
                 <>
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                         {[
-                            ['settings.usage.today', today?.totalTokens ?? 0],
+                            ...(range === 'today'
+                                ? []
+                                : [['settings.usage.today', today?.totalTokens ?? 0] as [string, number]]),
                             ['settings.usage.total', query.data.totals.totalTokens],
                             ['settings.usage.uncached', query.data.totals.uncachedTokens],
                             ['settings.usage.input', query.data.totals.inputTokens],

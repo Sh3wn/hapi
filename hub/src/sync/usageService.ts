@@ -329,6 +329,46 @@ function dayKey(timestamp: number, formatter: Intl.DateTimeFormat): string {
     return `${year}-${month}-${day}`
 }
 
+/** Local wall clock (h23) of `timestamp` in `timeZone`, for day-boundary math. */
+function localTimeOfDay(timestamp: number, timeZone: string): { hour: number; minute: number; second: number; millisecond: number } {
+    const parts = localTimeFormatter(timeZone).formatToParts(new Date(timestamp))
+    const read = (type: string): number => Number(parts.find((part) => part.type === type)?.value ?? Number.NaN)
+    const hour = read('hour')
+    const minute = read('minute')
+    const second = read('second')
+    if (!Number.isFinite(hour) || !Number.isFinite(minute) || !Number.isFinite(second)) {
+        throw new Error('Failed to format usage time of day')
+    }
+    return { hour, minute, second, millisecond: ((timestamp % 1_000) + 1_000) % 1_000 }
+}
+
+const localTimeFormatters = new Map<string, Intl.DateTimeFormat>()
+
+function localTimeFormatter(timeZone: string): Intl.DateTimeFormat {
+    const cached = localTimeFormatters.get(timeZone)
+    if (cached) return cached
+    const formatter = new Intl.DateTimeFormat('en-GB', {
+        timeZone,
+        hourCycle: 'h23',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    })
+    localTimeFormatters.set(timeZone, formatter)
+    return formatter
+}
+
+/**
+ * UTC instant of the local midnight before `timestamp`. The zone offset is read
+ * at `timestamp`, so a DST shift earlier the same day moves this boundary by the
+ * shift; only the reported `range.from` uses it — filtering and bucketing go
+ * through day keys.
+ */
+function startOfDay(timestamp: number, timeZone: string): number {
+    const { hour, minute, second, millisecond } = localTimeOfDay(timestamp, timeZone)
+    return timestamp - (hour * 3_600_000 + minute * 60_000 + second * 1_000 + millisecond)
+}
+
 export function getUsageSummary(
     store: Store,
     namespace: string,
@@ -342,11 +382,20 @@ export function getUsageSummary(
     collectUsageEvents(store, sessions)
 
     const now = Date.now()
-    const days = range === '30d' ? 30 : range === 'all' ? null : 7
-    const from = days === null ? null : now - days * 24 * 60 * 60 * 1000
+    const dayFormatter = createDayFormatter(timeZone)
+    // `today` is the viewer's calendar day, not a rolling 24h window: filter on
+    // the same day key the daily buckets use so the boundary is local midnight,
+    // DST included. It stays a null `from` only for `all`.
+    const todayKey = range === 'today' ? dayKey(now, dayFormatter) : null
+    const days = range === '30d' ? 30 : range === 'all' || todayKey !== null ? null : 7
+    const from = todayKey !== null
+        ? startOfDay(now, timeZone)
+        : days === null ? null : now - days * 24 * 60 * 60 * 1000
     const sessionIds = new Set(sessions.map((session) => session.id))
     const events = store.usage.getEvents(Array.from(sessionIds))
-    const isInRange = (event: UsageEvent) => (from === null || event.createdAt >= from) && event.createdAt <= now
+    const isInRange = (event: UsageEvent) => event.createdAt <= now && (todayKey !== null
+        ? dayKey(event.createdAt, dayFormatter) === todayKey
+        : from === null || event.createdAt >= from)
 
     const totals = emptyTotals()
     const daily = new Map<string, Totals>()
@@ -355,7 +404,6 @@ export function getUsageSummary(
     const sessionsWithUsage = new Set<string>()
     const cumulativePrevious = new Map<string, UsageSnapshot>()
     const cumulativeFingerprints = new Set<string>()
-    const dayFormatter = createDayFormatter(timeZone)
 
     for (const event of events) {
         let inputTokens = event.inputTokens

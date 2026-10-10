@@ -866,4 +866,84 @@ describe('usage service', () => {
         expect(store.usage.getEvents([target.id])).toHaveLength(1)
         store.close()
     })
+    it('scopes range=today to the viewer calendar day', () => {
+        const store = new Store(':memory:')
+        const session = store.sessions.getOrCreateSession(
+            'usage-today-test',
+            { path: '/tmp', host: 'test', flavor: 'claude' },
+            null,
+            'default',
+            'test-model'
+        )
+
+        const timeZone = 'Asia/Shanghai'
+        const formatter = new Intl.DateTimeFormat('en-CA', {
+            timeZone,
+            calendar: 'iso8601',
+            numberingSystem: 'latn',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        })
+        const dayKeyOf = (timestamp: number) => {
+            const parts = formatter.formatToParts(new Date(timestamp))
+            const value = (type: string) => parts.find((part) => part.type === type)?.value ?? ''
+            return `${value('year')}-${value('month')}-${value('day')}`
+        }
+
+        // Two requests: one earlier today in Shanghai, one yesterday there.
+        // Fixed offsets avoid depending on the wall clock at test time.
+        const todayKey = dayKeyOf(Date.now())
+        const startOfToday = Date.parse(`${todayKey}T00:00:00+08:00`)
+        const todayEvent = startOfToday + 60 * 60 * 1000
+        const yesterdayEvent = startOfToday - 60 * 60 * 1000
+        addAgentMessage(store, session.id, {
+            type: 'output',
+            data: { type: 'assistant', message: { id: 'today-claude', usage: { input_tokens: 100, output_tokens: 10 } } }
+        }, todayEvent)
+        addAgentMessage(store, session.id, {
+            type: 'output',
+            data: { type: 'assistant', message: { id: 'yesterday-claude', usage: { input_tokens: 1000, output_tokens: 100 } } }
+        }, yesterdayEvent)
+
+        const today = getUsageSummary(store, 'default', 'today', timeZone)
+        expect(today.totals.requests).toBe(1)
+        expect(today.totals.inputTokens).toBe(100)
+        expect(today.daily).toHaveLength(1)
+        expect(today.daily[0].key).toBe(todayKey)
+        // The reported window starts at (or just before) local midnight and never
+        // reaches back into yesterday's request.
+        expect(today.range.from).toBeLessThanOrEqual(todayEvent)
+        expect(today.range.from).toBeGreaterThan(yesterdayEvent)
+
+        const all = getUsageSummary(store, 'default', 'all', timeZone)
+        expect(all.totals.requests).toBe(2)
+        store.close()
+    })
+
+    it('keeps the rolling window for the day-based ranges', () => {
+        const store = new Store(':memory:')
+        const session = store.sessions.getOrCreateSession(
+            'usage-range-test',
+            { path: '/tmp', host: 'test', flavor: 'claude' },
+            null,
+            'default',
+            'test-model'
+        )
+        const now = Date.now()
+        addAgentMessage(store, session.id, {
+            type: 'output',
+            data: { type: 'assistant', message: { id: 'recent', usage: { input_tokens: 10, output_tokens: 1 } } }
+        }, now - 2 * 24 * 60 * 60 * 1000)
+        addAgentMessage(store, session.id, {
+            type: 'output',
+            data: { type: 'assistant', message: { id: 'old', usage: { input_tokens: 10, output_tokens: 1 } } }
+        }, now - 20 * 24 * 60 * 60 * 1000)
+
+        expect(getUsageSummary(store, 'default', '7d').totals.requests).toBe(1)
+        expect(getUsageSummary(store, 'default', '30d').totals.requests).toBe(2)
+        expect(getUsageSummary(store, 'default', undefined).totals.requests).toBe(1)
+        expect(getUsageSummary(store, 'default', 'all').range.from).toBeNull()
+        store.close()
+    })
 })

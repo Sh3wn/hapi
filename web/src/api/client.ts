@@ -783,7 +783,7 @@ export class ApiClient {
     }
 
     async getUsageSummary(
-        range: '7d' | '30d' | 'all' = '7d',
+        range: 'today' | '7d' | '30d' | 'all' = '7d',
         timeZone: string = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
     ): Promise<UsageSummaryResponse> {
         const params = new URLSearchParams({
