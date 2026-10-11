@@ -97,9 +97,23 @@ timeout) while the client never sees a TLS ClientHello.
    cp -r deploy/systemd/user/* ~/.config/systemd/user/
    systemctl --user daemon-reload
    systemctl --user enable --now hapi-hub hapi-runner
+   loginctl enable-linger "$USER"        # keep user units when the last session ends
    ```
    If this machine has no working user systemd bus, stop and ask before falling
    back to `nohup`/`setsid`, and say so in the report.
+
+   **WSL hosts.** These are user units, so they stop when the last login session
+   ends, and WSL2 also tears the distribution down once no process launched
+   through `wsl.exe` is left — closing VS Code's WSL window therefore stops the
+   hub *and* kills running sessions. Do both of these and verify:
+   - inside WSL: `loginctl enable-linger "$USER"` (`loginctl show-user "$USER" | grep Linger` → `Linger=yes`);
+   - on Windows: hold the distribution open at logon, e.g. a Task Scheduler task
+     (trigger *At log on*, hidden) running
+     `wsl.exe -d <distro> -e sleep infinity`.
+   Then close VS Code, reopen a `wsl.exe` window and check
+   `systemctl --user is-active hapi-hub hapi-runner` (both `active`) and that the
+   hub origin still answers. Never `wsl --shutdown`/`wsl --terminate` while
+   sessions are running: services restart, sessions do not.
 6. Apply the proxy decision above.
 7. Verify — all of these must pass before you claim success:
    ```bash
