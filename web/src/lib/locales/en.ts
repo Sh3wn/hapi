@@ -224,6 +224,10 @@ export default {
   // Session inactive
   'session.inactive.autoResume': 'This session is inactive. Send a message to resume.',
   'session.inactive.cannotResume': 'This session is inactive and cannot be resumed.',
+  'session.inactive.bringOnline': 'Bring online',
+  'session.inactive.bringingOnline': 'Bringing online…',
+  'session.inactive.bringOnlineFailed': 'Could not bring this session online.',
+  'session.inactive.machineOffline': 'Nothing is connected on that machine yet — start the runner there first.',
 
   // Session header
   'session.title': 'Files',

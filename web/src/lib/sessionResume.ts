@@ -93,3 +93,17 @@ export function resolveCursorReopenGate(args: {
     }
     return { disabledReason: 'checking', probeUnverified: false }
 }
+
+/**
+ * Why an on-demand resume (the inactive banner's wake button) failed. The hub
+ * answers `no_machine_online` when nothing on that machine is connected and
+ * `resume_unavailable` when the agent thread cannot be reopened; both need
+ * different wording than a generic failure.
+ */
+export type BringOnlineFailure = 'machine_offline' | 'resume_unavailable' | 'unknown'
+
+export function bringOnlineFailure(code: string | undefined): BringOnlineFailure {
+    if (code === 'no_machine_online') return 'machine_offline'
+    if (code === 'resume_unavailable') return 'resume_unavailable'
+    return 'unknown'
+}

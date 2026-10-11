@@ -224,6 +224,10 @@ export default {
   // Session inactive
   'session.inactive.autoResume': '此会话已停止。发送消息即可恢复。',
   'session.inactive.cannotResume': '此会话已停止，无法恢复。',
+  'session.inactive.bringOnline': '唤醒上线',
+  'session.inactive.bringingOnline': '正在唤醒…',
+  'session.inactive.bringOnlineFailed': '唤醒该会话失败。',
+  'session.inactive.machineOffline': '那台机器上目前没有连接，请先在该机器上启动 runner。',
 
   // Session header
   'session.title': '文件',

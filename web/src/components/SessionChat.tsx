@@ -28,7 +28,7 @@ import { buildVisibleChatBlocks, isToolGroupBlock, type ToolGroupBlock } from '@
 import { useUnseenBlockCount } from '@/hooks/useUnseenBlockCount'
 import { useCodexExplorationCollapse } from '@/hooks/useCodexExplorationCollapse'
 import { isQueuedForInvocation } from '@/lib/messages'
-import { inactiveSessionCanResume } from '@/lib/sessionResume'
+import { bringOnlineFailure, inactiveSessionCanResume } from '@/lib/sessionResume'
 import {
     getCodexModelReasoningEfforts,
     supportsCodexReasoningEffort
@@ -688,6 +688,10 @@ function SessionChatInner(props: SessionChatProps) {
         props.messages.length,
         props.cursorChatOnDisk
     )
+    // On-demand wake for an inactive session: the hub resumes the agent thread
+    // (and spawns the runner when nothing on that machine is connected).
+    const [bringingOnline, setBringingOnline] = useState(false)
+    const [bringOnlineError, setBringOnlineError] = useState<string | null>(null)
     const terminalSupported = isRemoteTerminalSupported(props.session.metadata)
     // Offer the agent terminal only for an ACTIVE PTY session: a 'remote'/SDK
     // session has no agent PTY, and an archived/inactive one has no live PTY (and
@@ -725,6 +729,27 @@ function SessionChatInner(props: SessionChatProps) {
     const lastSyncedCursorModelRef = useRef<string | null | undefined>(undefined)
     const scratchlist = useHubScratchlist(props.session.id, props.api)
     const queryClient = useQueryClient()
+
+    const handleBringOnline = useCallback(async () => {
+        if (!props.api || bringingOnline || !inactiveCanResume) return
+        setBringingOnline(true)
+        setBringOnlineError(null)
+        try {
+            await props.api.resumeSession(props.session.id, {
+                permissionMode: props.session.permissionMode ?? undefined
+            })
+            void queryClient.invalidateQueries({ queryKey: queryKeys.session(props.session.id) })
+        } catch (error) {
+            const failure = bringOnlineFailure(error instanceof ApiError ? error.code : undefined)
+            setBringOnlineError(failure === 'machine_offline'
+                ? t('session.inactive.machineOffline')
+                : failure === 'resume_unavailable'
+                    ? t('session.inactive.cannotResume')
+                    : t('session.inactive.bringOnlineFailed'))
+        } finally {
+            setBringingOnline(false)
+        }
+    }, [props.api, props.session.id, props.session.permissionMode, bringingOnline, inactiveCanResume, queryClient, t])
     const { sessions: allSessions } = useSessions(props.api)
     const resolveSessionMentionTooltip = useCallback((id: string, title: string) => {
         const hit = allSessions.find((s) => s.id === id) ?? null
@@ -1931,6 +1956,21 @@ function SessionChatInner(props: SessionChatProps) {
                     {inactiveCanResume
                         ? t('session.inactive.autoResume')
                         : t('session.inactive.cannotResume')}
+                    {inactiveCanResume ? (
+                        <div className="mt-2 flex flex-col items-center gap-1">
+                            <button
+                                type="button"
+                                onClick={() => { void handleBringOnline() }}
+                                disabled={bringingOnline}
+                                className="rounded-md bg-[var(--app-button)] px-3 py-1.5 text-sm text-[var(--app-button-text)] disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                {bringingOnline ? t('session.inactive.bringingOnline') : t('session.inactive.bringOnline')}
+                            </button>
+                            {bringOnlineError ? (
+                                <div className="text-xs text-[var(--app-badge-warning-text)]">{bringOnlineError}</div>
+                            ) : null}
+                        </div>
+                    ) : null}
                 </div>
             ) : null}
 

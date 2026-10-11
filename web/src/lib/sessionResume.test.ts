@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Session } from '@/types/api'
 import {
+    bringOnlineFailure,
     inactiveSessionCanResume,
     resolveAgentSessionIdFromMetadata,
     resolveCursorReopenGate,
@@ -367,5 +368,14 @@ describe('sessionResume — regression for all other flavor ids', () => {
         expect(resolveAgentSessionIdFromMetadata({
             path: '/p', host: 'h', flavor: 'mystery', claudeSessionId: 'cl-1',
         })).toBe('cl-1')
+    })
+})
+
+describe('bringOnlineFailure', () => {
+    it('maps the hub resume codes the wake button explains', () => {
+        expect(bringOnlineFailure('no_machine_online')).toBe('machine_offline')
+        expect(bringOnlineFailure('resume_unavailable')).toBe('resume_unavailable')
+        expect(bringOnlineFailure('session_not_found')).toBe('unknown')
+        expect(bringOnlineFailure(undefined)).toBe('unknown')
     })
 })

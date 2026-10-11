@@ -223,6 +223,10 @@ export default {
 
   // Неактивная сессия
   'session.inactive.autoResume': 'Эта сессия неактивна. Отправьте сообщение, чтобы возобновить.',
+  'session.inactive.bringOnline': 'Подключить',
+  'session.inactive.bringingOnline': 'Подключение…',
+  'session.inactive.bringOnlineFailed': 'Не удалось подключить сессию.',
+  'session.inactive.machineOffline': 'На этой машине пока ничего не подключено — сначала запустите runner.',
   'session.inactive.cannotResume': 'Эта сессия неактивна и не может быть возобновлена.',
 
   // Шапка сессии
