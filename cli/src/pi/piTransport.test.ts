@@ -169,6 +169,87 @@ describe('PiTransport', () => {
         });
     });
 
+    it('negotiates protocol v2 when the ready frame advertises it', () => {
+            const transport = new PiTransport({ command: 'pi', args: ['--mode', 'rpc'], cwd: '/work' });
+            transport.start();
+            const handler = vi.fn();
+            transport.onEvent(handler);
+
+            mockProcess.stdout.emit('data', JSON.stringify({
+                type: 'ready',
+                protocolVersion: 1,
+                supportedProtocolVersions: [1, 2],
+                maxFrameBytes: 1024 * 1024
+            }) + '\n');
+
+            const writes = vi.mocked(mockProcess.stdin.write).mock.calls.map((call) => JSON.parse(String(call[0])));
+            expect(writes).toContainEqual(expect.objectContaining({
+                type: 'negotiate_protocol',
+                protocolVersion: 2
+            }));
+            // The ready frame is still a session event; only the negotiation reply is internal.
+            expect(handler).toHaveBeenCalledWith(expect.objectContaining({ type: 'ready' }));
+        });
+
+        it('swallows the negotiation response instead of dispatching it', () => {
+            const transport = new PiTransport({ command: 'pi', args: ['--mode', 'rpc'], cwd: '/work' });
+            transport.start();
+            const handler = vi.fn();
+            transport.onEvent(handler);
+
+            mockProcess.stdout.emit('data', JSON.stringify({
+                type: 'ready',
+                protocolVersion: 1,
+                supportedProtocolVersions: [1, 2]
+            }) + '\n');
+            const negotiate = vi.mocked(mockProcess.stdin.write).mock.calls
+                .map((call) => JSON.parse(String(call[0])))
+                .find((message) => message.type === 'negotiate_protocol');
+            expect(negotiate).toBeDefined();
+            handler.mockClear();
+
+            mockProcess.stdout.emit('data', JSON.stringify({
+                id: negotiate.id,
+                type: 'response',
+                command: 'negotiate_protocol',
+                success: true,
+                data: { protocolVersion: 2 }
+            }) + '\n');
+
+            expect(handler).not.toHaveBeenCalled();
+        });
+
+        it('reassembles rpc_chunk frames into one session event', () => {
+            const transport = new PiTransport({ command: 'pi', args: ['--mode', 'rpc'], cwd: '/work' });
+            transport.start();
+            const handler = vi.fn();
+            transport.onEvent(handler);
+
+            const frame = {
+                type: 'response',
+                id: 'rpc-1',
+                command: 'get_entries',
+                success: true,
+                data: { padding: 'a'.repeat(1024 * 1024 + 64 * 1024) }
+            };
+            const bytes = Buffer.from(JSON.stringify(frame), 'utf8');
+            const payloadBytes = 256 * 1024;
+            const count = Math.ceil(bytes.byteLength / payloadBytes);
+            const lines = Array.from({ length: count }, (_, index) => JSON.stringify({
+                type: 'rpc_chunk',
+                chunkId: 'rpc-1',
+                index,
+                count,
+                byteLength: bytes.byteLength,
+                data: bytes.subarray(index * payloadBytes, (index + 1) * payloadBytes).toString('base64')
+            }) + '\n');
+
+            mockProcess.stdout.emit('data', lines.join(''));
+
+            expect(handler).toHaveBeenCalledTimes(1);
+            expect(handler).toHaveBeenCalledWith(frame);
+        });
+
     describe('kill()', () => {
         it('should send SIGTERM to the process', () => {
             const transport = new PiTransport({ command: 'pi', args: ['--mode', 'rpc'], cwd: '/work' });

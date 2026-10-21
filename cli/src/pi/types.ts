@@ -203,7 +203,8 @@ export type PiRpcCommand =
     | { id?: string; type: 'fork'; entryId: string }
     | { id?: string; type: 'clone' }
     | { id?: string; type: 'get_fork_messages' }
-    | { id?: string; type: 'get_entries'; since?: string };
+    | { id?: string; type: 'get_entries'; since?: string }
+    | { id?: string; type: 'negotiate_protocol'; protocolVersion: 2 };
 
 // ============================================================================
 // Pi RPC Responses (stdout)

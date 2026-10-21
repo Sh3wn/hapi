@@ -1,7 +1,10 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { isObject } from '@hapi/protocol';
 import { logger } from '@/ui/logger';
 import { JsonLineParser } from '@/utils/jsonLineParser';
 import { PiAgentEventSchema } from './schemas';
+import { PiRpcChunkDecoder } from './rpcChunkDecoder';
 import type { PiAgentEvent, PiRpcCommand } from './types';
 
 export interface PiTransportOptions {
@@ -20,6 +23,10 @@ export class PiTransport extends JsonLineParser {
     private started = false;
     private exited = false;
     private closeReported = false;
+    private readonly chunkDecoder = new PiRpcChunkDecoder();
+    private negotiationId: string | null = null;
+    private negotiationRequested = false;
+    private protocolVersion: 1 | 2 = 1;
     private readonly options: PiTransportOptions;
 
     constructor(options: PiTransportOptions) {
@@ -114,14 +121,60 @@ export class PiTransport extends JsonLineParser {
     }
 
     protected handleLine(line: string): void {
+        let parsed: unknown;
         try {
-            const parsed = JSON.parse(line);
-            const result = PiAgentEventSchema.safeParse(parsed);
-            if (result.success) {
-                this.eventHandler?.(result.data as PiAgentEvent);
-            }
+            parsed = JSON.parse(line);
         } catch {
             logger.debug(`[pi] Skipping malformed JSON: ${line.slice(0, 100)}`);
+            return;
         }
+
+        try {
+            const decoded = this.chunkDecoder.push(parsed);
+            if (decoded.kind === 'pending') return;
+            parsed = decoded.frame;
+        } catch (error) {
+            // A malformed chunk sequence loses only that frame; later lines stay usable.
+            logger.debug(`[pi] Dropping RPC chunk sequence: ${error instanceof Error ? error.message : String(error)}`);
+            return;
+        }
+
+        this.requestProtocolV2(parsed);
+        if (this.consumeNegotiationResponse(parsed)) return;
+
+        const result = PiAgentEventSchema.safeParse(parsed);
+        if (result.success) {
+            this.eventHandler?.(result.data as PiAgentEvent);
+        }
+    }
+
+    /**
+     * OMP caps a protocol-v1 response at 1 MiB and replaces anything larger with
+     * `RPC response exceeded the transport limit` (large `get_entries` history
+     * reads hit this immediately). Protocol 2 raises the ceiling to 64 MiB and
+     * chunks larger frames, so ask for it as soon as the ready frame advertises
+     * support. The response is consumed here: it is transport bookkeeping, not a
+     * session event.
+     */
+    private requestProtocolV2(value: unknown): void {
+        if (this.negotiationRequested || !isObject(value) || value.type !== 'ready') return;
+        this.negotiationRequested = true;
+        const supported = value.supportedProtocolVersions;
+        if (!Array.isArray(supported) || !supported.includes(2)) return;
+        const id = `hapi-negotiate-${randomUUID()}`;
+        this.negotiationId = id;
+        this.send({ id, type: 'negotiate_protocol', protocolVersion: 2 });
+    }
+
+    private consumeNegotiationResponse(value: unknown): boolean {
+        if (this.negotiationId === null) return false;
+        if (!isObject(value) || value.type !== 'response' || value.id !== this.negotiationId) return false;
+        const negotiated = value.success === true
+            && isObject(value.data)
+            && value.data.protocolVersion === 2;
+        if (negotiated) this.protocolVersion = 2;
+        logger.debug(`[pi] RPC protocol negotiation ${negotiated ? 'accepted v2' : 'stayed on v1'}`);
+        this.negotiationId = null;
+        return true;
     }
 }
