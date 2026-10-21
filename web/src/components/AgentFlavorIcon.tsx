@@ -70,6 +70,7 @@ export function AgentFlavorIcon({ flavor, className }: { flavor?: string | null;
         )
     }
 
+    // OMP is a Pi fork and keeps the Pi mark until it ships its own logo.
     if (normalized === 'pi' || normalized === 'omp') {
         return (
             <span
