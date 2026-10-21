@@ -2,6 +2,7 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, ty
 import type { ApiClient } from '@/api/client'
 import type { CodexDuplicateSessionGroup, CodexLocalSessionSummary, Machine, PiLocalSessionSummary } from '@/types/api'
 import type { CodexCollaborationMode, GrokPermissionMode, PermissionMode, CopilotAgentMode } from '@hapi/protocol'
+import { isPiFamilyFlavor } from '@hapi/protocol'
 import { codexModelAdvertisesFastTier } from '@/components/AssistantChat/codexFastMode'
 import { usePlatform } from '@/hooks/usePlatform'
 import { useMachinePathsExists } from '@/hooks/useMachinePathsExists'
@@ -697,7 +698,8 @@ export function NewSession(props: {
     const piModelsState = usePiModelsForMachine({
         api: props.api,
         machineId,
-        enabled: agent === 'pi' && Boolean(machineId)
+        flavor: agent === 'omp' ? 'omp' : 'pi',
+        enabled: isPiFamilyFlavor(agent) && Boolean(machineId)
     })
     // Pi models are grouped by provider (optionSource: 'machine' in the agent
     // config descriptor). Option values are provider-qualified
@@ -715,7 +717,7 @@ export function NewSession(props: {
         ]
     }, [piModelsState.availableModels])
     const piSelectedModel = useMemo(() => {
-        if (agent !== 'pi' || model === 'auto') return null
+        if (!isPiFamilyFlavor(agent) || model === 'auto') return null
         const slash = model.indexOf('/')
         if (slash > 0) {
             const provider = model.slice(0, slash)
@@ -731,7 +733,7 @@ export function NewSession(props: {
         // CLI would reject it and fall back to Pi's default), and a level the
         // selected model's thinkingLevelMap marks unsupported must not survive
         // a model switch (mirrors the HappyComposer effort reconciliation).
-        if (agent !== 'pi' || effort === 'auto') {
+        if (!isPiFamilyFlavor(agent) || effort === 'auto') {
             return
         }
         if (piSelectedModel?.reasoning === false) {
@@ -764,7 +766,7 @@ export function NewSession(props: {
         // left the catalog must not stay in state: the native select would
         // visually fall back to Default while Create still sends the stale id.
         if (
-            agent !== 'pi'
+            !isPiFamilyFlavor(agent)
             || piModelsState.isLoading
             || piModelsState.error
             || model === 'auto'
@@ -1573,7 +1575,7 @@ export function NewSession(props: {
                     : agent === 'cursor'
                         ? (model === 'auto' || !model ? 'auto' : model)
                         : (model !== 'auto' ? model : undefined)
-            const resolvedEffort = (agent === 'claude' || agent === 'grok' || agent === 'pi') && effort !== 'auto'
+            const resolvedEffort = (agent === 'claude' || agent === 'grok' || isPiFamilyFlavor(agent)) && effort !== 'auto'
                 ? effort
                 : undefined
             const resolvedModelReasoningEffort = (agent === 'codex' || agent === 'opencode') && modelReasoningEffort !== 'default'
@@ -1744,7 +1746,7 @@ export function NewSession(props: {
                 deferredDirectoryExists === undefined
                 || (deferredDirectoryExists === true && kimiModelsState.isLoading)
             ))
-        || (agent === 'pi'
+        || (isPiFamilyFlavor(agent)
             && model !== 'auto'
             && piModelsState.isLoading)
     const fastModeSelectionPending = agent === 'codex'
@@ -1933,7 +1935,7 @@ export function NewSession(props: {
                                         ? copilotModelOptions
                                         : agent === 'kimi'
                                             ? kimiModelOptions
-                                            : agent === 'pi'
+                                            : isPiFamilyFlavor(agent)
                                                 ? (showPiLaunchConfig ? piModelOptions : undefined)
                                         : undefined
                         }
@@ -1943,13 +1945,13 @@ export function NewSession(props: {
                             || (agent === 'grok' && Boolean(grokModelsState.error))
                             || (agent === 'copilot' && Boolean(copilotModelsState.error))
                             || (agent === 'kimi' && Boolean(kimiModelsState.error))
-                            || (agent === 'pi' && Boolean(piModelsState.error))
+                            || (isPiFamilyFlavor(agent) && Boolean(piModelsState.error))
                         }
                         isLoading={(agent === 'codex' && codexModelsState.isLoading)
                             || (agent === 'grok' && grokModelsState.isLoading)
                             || (agent === 'copilot' && copilotModelsState.isLoading)
                             || (agent === 'kimi' && kimiModelsState.isLoading)
-                            || (agent === 'pi' && piModelsState.isLoading)}
+                            || (isPiFamilyFlavor(agent) && piModelsState.isLoading)}
                         error={agent === 'codex' && codexModelsState.error
                             ? `${t('newSession.model.loadFailed')}: ${codexModelsState.error}`
                             : agent === 'grok' && grokModelsState.error
@@ -1958,7 +1960,7 @@ export function NewSession(props: {
                                     ? `${t('newSession.model.loadFailed')}: ${copilotModelsState.error}`
                                     : agent === 'kimi' && kimiModelsState.error
                                         ? `${t('newSession.model.loadFailed')}: ${kimiModelsState.error}`
-                                        : agent === 'pi' && piModelsState.error
+                                        : isPiFamilyFlavor(agent) && piModelsState.error
                                             ? `${t('newSession.model.loadFailed')}: ${piModelsState.error}`
                                     : null}
                         onModelChange={setModel}
@@ -1976,7 +1978,7 @@ export function NewSession(props: {
                     grokOptions={agent === 'grok' ? grokEffortOptions : undefined}
                     codexReasoningOptions={agent === 'codex' ? codexReasoningEffortOptions : undefined}
                     opencodeVariantOptions={agent === 'opencode' ? opencodeVariantOptions : undefined}
-                    piSelectedModel={agent === 'pi' ? piSelectedModel : null}
+                    piSelectedModel={isPiFamilyFlavor(agent) ? piSelectedModel : null}
                 />
             ) : null}
             <PermissionField

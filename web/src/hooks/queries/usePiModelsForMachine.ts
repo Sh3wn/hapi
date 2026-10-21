@@ -5,6 +5,8 @@ import { queryKeys } from '@/lib/query-keys'
 export function usePiModelsForMachine(args: {
     api: ApiClient | null
     machineId?: string | null
+    /** Pi-family product to probe (`pi` or `omp`). */
+    flavor?: 'pi' | 'omp'
     enabled?: boolean
 }): {
     availableModels: PiModelSummary[]
@@ -13,17 +15,18 @@ export function usePiModelsForMachine(args: {
     error: string | null
 } {
     const { api, machineId } = args
+    const flavor = args.flavor ?? 'pi'
     const enabled = Boolean(args.enabled && api && machineId)
 
     const query = useQuery({
         queryKey: machineId
-            ? queryKeys.machinePiModels(machineId)
-            : ['machine-pi-models', 'unknown'] as const,
+            ? queryKeys.machinePiModels(machineId, flavor)
+            : ['machine-pi-models', 'unknown', flavor] as const,
         queryFn: async () => {
             if (!api || !machineId) {
                 throw new Error('Pi models target unavailable')
             }
-            return await api.getMachinePiModels(machineId)
+            return await api.getMachinePiModels(machineId, flavor)
         },
         enabled,
         staleTime: 60_000,

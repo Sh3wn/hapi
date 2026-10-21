@@ -7,7 +7,7 @@
  * - No E2E encryption; data is stored as JSON in SQLite
  */
 
-import { isKnownFlavor, isLiveLifecycleState, isSteeringSupportedForSession, type LocalResumeTarget, type ResumableSession, type SessionEndReason } from '@hapi/protocol'
+import { isKnownFlavor, isLiveLifecycleState, isPiFamilyFlavor, isSteeringSupportedForSession, type LocalResumeTarget, type ResumableSession, type SessionEndReason } from '@hapi/protocol'
 import {
     cliBinaryUpdatedOnDisk,
     isMachineCapabilitySkewed,
@@ -1507,7 +1507,7 @@ export class SyncEngine {
             childMetadata.codexSessionId = rpcResult.nativeSessionId
         } else if (flavor === 'grok') {
             childMetadata.grokSessionId = rpcResult.nativeSessionId
-        } else if (flavor === 'pi') {
+        } else if (isPiFamilyFlavor(flavor)) {
             childMetadata.piSessionId = rpcResult.nativeSessionId
         } else if (flavor === 'claude') {
             // Child will bind the forked Claude id after --fork-session starts.
@@ -1517,8 +1517,8 @@ export class SyncEngine {
         // A Pi native fork already carries the branch's authoritative model and
         // thinking state. Do not replay the source wrapper's current overrides
         // onto the child; the resumed child will report its own get_state.
-        const forkModel = flavor === 'pi' ? undefined : source.model ?? undefined
-        const forkEffort = flavor === 'pi' ? undefined : source.effort ?? undefined
+        const forkModel = isPiFamilyFlavor(flavor) ? undefined : source.model ?? undefined
+        const forkEffort = isPiFamilyFlavor(flavor) ? undefined : source.effort ?? undefined
 
         let childCreated = false
         let spawnAttempted = false
@@ -1597,7 +1597,7 @@ export class SyncEngine {
                 }
             }
 
-            if (flavor === 'pi') {
+            if (isPiFamilyFlavor(flavor)) {
                 const bound = await this.waitForExactNativeForkBound(
                     childId, rpcResult.nativeSessionId, 'piSessionId', true
                 )
@@ -2742,7 +2742,7 @@ export class SyncEngine {
         if (flavor === 'cursor') return metadata.cursorSessionId ?? null
         if (flavor === 'kimi') return metadata.kimiSessionId ?? null
         if (flavor === 'copilot') return metadata.copilotSessionId ?? null
-        if (flavor === 'pi') return metadata.piSessionId ?? null
+        if (isPiFamilyFlavor(flavor)) return metadata.piSessionId ?? null
         // The official DSH ACP server creates fresh sessions only; never fall
         // through to a stale Claude id and advertise a false resume path.
         if (flavor === 'dsh') return null
@@ -3206,17 +3206,17 @@ export class SyncEngine {
         const targetMachine = this.resolveOnlineMachineForSession(
             session,
             namespace,
-            { strictMachineId: flavor === 'cursor' || (flavor === 'pi' && resumeToken !== undefined) }
+            { strictMachineId: flavor === 'cursor' || (isPiFamilyFlavor(flavor) && resumeToken !== undefined) }
         )
         if (!targetMachine) {
             return { type: 'error', message: 'No machine online', code: 'no_machine_online' }
         }
 
-        if (flavor === 'pi' && resumeToken && targetMachine.runnerState?.capabilities?.piExistingSessionResume !== true) {
+        if (isPiFamilyFlavor(flavor) && resumeToken && targetMachine.runnerState?.capabilities?.piExistingSessionResume !== true) {
             return { type: 'error', message: 'Pi resume requires an upgraded runner', code: 'resume_failed' }
         }
 
-        const requiresPiNativeReady = flavor === 'pi' && resumeToken !== undefined
+        const requiresPiNativeReady = isPiFamilyFlavor(flavor) && resumeToken !== undefined
         if (requiresPiNativeReady) {
             if (this.isPiResumeBlocked(access.sessionId)) {
                 return { type: 'error', message: 'Pi resume is already in progress', code: 'resume_failed' }
@@ -3489,7 +3489,7 @@ export class SyncEngine {
                             }
                         }
                     }
-                    const message = flavor === 'pi'
+                    const message = isPiFamilyFlavor(flavor)
                         ? readyResult === 'ended'
                             ? 'Pi session ended before native resume completed'
                             : 'Pi session failed to become native-ready'
@@ -3632,7 +3632,7 @@ export class SyncEngine {
             }
         }
 
-        if (metadata?.flavor === 'pi' && this.isPiResumeBlocked(access.sessionId)) {
+        if (isPiFamilyFlavor(metadata?.flavor) && this.isPiResumeBlocked(access.sessionId)) {
             if (session.active) {
                 return { type: 'error', message: 'Pi resume is already in progress', code: 'resume_failed' }
             }
@@ -4299,8 +4299,8 @@ export class SyncEngine {
         return await this.rpcGateway.listAgyModelsForMachine(machineId, options)
     }
 
-    async listPiModelsForMachine(machineId: string): Promise<RpcListPiModelsResponse> {
-        return await this.rpcGateway.listPiModelsForMachine(machineId)
+    async listPiModelsForMachine(machineId: string, flavor: 'pi' | 'omp' = 'pi'): Promise<RpcListPiModelsResponse> {
+        return await this.rpcGateway.listPiModelsForMachine(machineId, flavor)
     }
 
     async listCodexModelsForMachine(machineId: string): Promise<RpcListCodexModelsResponse> {

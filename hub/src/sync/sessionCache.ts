@@ -1,4 +1,4 @@
-import { SESSION_LIFECYCLE_IDLE, SESSION_LIFECYCLE_RUNNING } from '@hapi/protocol'
+import { SESSION_LIFECYCLE_IDLE, SESSION_LIFECYCLE_RUNNING, isPiFamilyFlavor } from '@hapi/protocol'
 import { AgentStateSchema, MetadataSchema, SessionPatchSchema, TeamStateSchema } from '@hapi/protocol/schemas'
 import type { CodexCollaborationMode, CopilotAgentMode, PermissionMode, Session, SessionPatch } from '@hapi/protocol/types'
 import type { Store } from '../store'
@@ -841,7 +841,7 @@ export class SessionCache {
             // Pi requires provider + modelId to uniquely identify a model.
             // Persist the provider-qualified form in metadata so web can
             // resolve the exact model even when two providers share a modelId.
-            if (session.metadata?.flavor === 'pi') {
+            if (isPiFamilyFlavor(session.metadata?.flavor)) {
                 this.persistPiSelectedModel(session, piModelObject)
             }
             this.markRuntimeConfigUpdated(sessionId, 'model', appliedAt)

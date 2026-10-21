@@ -267,6 +267,23 @@ describe('buildCliArgs', () => {
         expect(args[0]).toBe('pi')
     })
 
+    it('launches hapi omp with its own binary and Pi-family resume flags', () => {
+        const args = buildCliArgs('omp', {
+            directory: '/tmp',
+            resumeSessionId: 'some-omp-session-id',
+            effort: 'max',
+        }, true)
+
+        expect(args[0]).toBe('omp')
+        expect(args).toContain('--session-id')
+        expect(args).toContain('some-omp-session-id')
+        expect(args).toContain('--effort')
+        expect(args).toContain('max')
+        // OMP RPC mode rejects permission flags just like Pi.
+        expect(args).not.toContain('--permission-mode')
+        expect(args).not.toContain('--yolo')
+    })
+
     it('reuses the original HAPI row for Pi native resume', () => {
         const args = buildCliArgs('pi', {
             directory: '/tmp',

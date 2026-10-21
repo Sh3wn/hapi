@@ -60,7 +60,7 @@ import {
     type ComposerSendIntent,
 } from '@/lib/messageDelivery'
 import type { MessageDeliveryMode } from '@hapi/protocol'
-import { isSteeringSupportedForSession } from '@hapi/protocol'
+import { isPiFamilyFlavor, isSteeringSupportedForSession } from '@hapi/protocol'
 import { createAttachmentAdapter } from '@/lib/attachmentAdapter'
 import { rewindMessageWindow, type OlderLoadOutcome } from '@/lib/message-window-store'
 import { ShareSeedConsumer } from '@/components/ShareSeedConsumer'
@@ -1185,7 +1185,7 @@ function SessionChatInner(props: SessionChatProps) {
     const piModelsState = usePiModels({
         api: props.api,
         sessionId: props.session.id,
-        enabled: agentFlavor === 'pi' && props.session.active
+        enabled: isPiFamilyFlavor(agentFlavor) && props.session.active
     })
     // Fallback to cached models from metadata when session is inactive
     const piMetadata = props.session.metadata as Record<string, unknown> | null
@@ -1193,9 +1193,9 @@ function SessionChatInner(props: SessionChatProps) {
     // Provider-qualified selected model — disambiguates when two providers
     // share a modelId (hub persists this alongside the legacy modelId string).
     const piSelectedModel = piMetadata?.piSelectedModel as { provider: string; modelId: string } | null | undefined
-    const piModels = agentFlavor === 'pi' ? (piModelsState.availableModels.length > 0 ? piModelsState.availableModels : piCachedModels) : undefined
+    const piModels = isPiFamilyFlavor(agentFlavor) ? (piModelsState.availableModels.length > 0 ? piModelsState.availableModels : piCachedModels) : undefined
     const piContextWindow = useMemo(() => {
-        if (agentFlavor !== 'pi' || !props.session.model) return undefined
+        if (!isPiFamilyFlavor(agentFlavor) || !props.session.model) return undefined
         return resolvePiContextWindow(piModels, piSelectedModel, props.session.model)
     }, [agentFlavor, piModels, piSelectedModel, props.session.model])
     const cursorCatalogReadinessArgs = useMemo(() => ({
@@ -2079,7 +2079,7 @@ function SessionChatInner(props: SessionChatProps) {
                                     updatePendingSchedule(restored)
                                 }}
                                 canSteer={isSteeringSupportedForSession(props.session.metadata)
-                                    && (agentFlavor === 'pi'
+                                    && (isPiFamilyFlavor(agentFlavor)
                                         ? props.session.thinking
                                         : props.session.agentState?.steeringActive === true)
                                     && !controlledByUser}
@@ -2140,7 +2140,7 @@ function SessionChatInner(props: SessionChatProps) {
                                         : undefined
                         }
                         piModels={piModels}
-                        piSelectedModel={agentFlavor === 'pi' ? piSelectedModel : undefined}
+                        piSelectedModel={isPiFamilyFlavor(agentFlavor) ? piSelectedModel : undefined}
                         availableModelReasoningEffortOptions={
                             agentFlavor === 'codex'
                                 ? codexReasoningEffortOptions
@@ -2215,7 +2215,7 @@ function SessionChatInner(props: SessionChatProps) {
                                         && cursorPicker.modelOptions.length > 0
                                         ? ((model) => handleCursorBaseModelChange(typeof model === 'string' ? model : model?.modelId ?? null))
                                         : undefined)
-                                    : agentFlavor === 'pi'
+                                    : isPiFamilyFlavor(agentFlavor)
                                         ? (props.session.active && !piModelsState.error ? handleModelChange : undefined)
                                         : agentFlavor === 'grok'
                                             ? (props.session.active && !controlledByUser && !grokModelsState.error

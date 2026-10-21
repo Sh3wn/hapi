@@ -1,4 +1,4 @@
-import { isClaudeModelPreset } from '@hapi/protocol'
+import { isClaudeModelPreset, isPiFamilyFlavor } from '@hapi/protocol'
 
 /**
  * Context windows vary by model/provider and may change over time.
@@ -52,7 +52,7 @@ export function getContextBudgetTokens(model: string | null | undefined, flavor?
         return Math.max(1, DEFAULT_CODEX_CONTEXT_WINDOW_TOKENS - CONTEXT_HEADROOM_TOKENS)
     }
 
-    if (flavor === 'pi') {
+    if (isPiFamilyFlavor(flavor)) {
         return Math.max(1, DEFAULT_PI_CONTEXT_WINDOW_TOKENS - CONTEXT_HEADROOM_TOKENS)
     }
 

@@ -398,6 +398,7 @@ describe('resumeCommand', () => {
 
         expect(handoffSessionToLocalMock).not.toHaveBeenCalled()
         expect(runPiMock).toHaveBeenCalledWith({
+            flavor: 'pi',
             existingSessionId: 'hapi-session-pi',
             workingDirectory: '/tmp/project',
             resumeSessionId: 'pi-session-123',

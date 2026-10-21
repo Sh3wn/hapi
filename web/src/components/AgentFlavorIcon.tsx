@@ -70,7 +70,7 @@ export function AgentFlavorIcon({ flavor, className }: { flavor?: string | null;
         )
     }
 
-    if (normalized === 'pi') {
+    if (normalized === 'pi' || normalized === 'omp') {
         return (
             <span
                 aria-hidden="true"

@@ -7,7 +7,7 @@ import { registerLocalHandoffHandler } from '@/agent/localHandoff';
 import { createRunnerLifecycle, createModeChangeHandler, setControlledByUser } from '@/agent/runnerLifecycle';
 import { getInvokedCwd } from '@/utils/invokedCwd';
 import { PiTransport } from './piTransport';
-import { resolvePiCommand } from './utils/piExecutable';
+import { resolvePiFamilyCommand } from './utils/piExecutable';
 import { PiSession } from './session';
 import { PiConversationHistory, PiHistoryRestoreError } from './conversationHistory';
 import { parsePiModels, parsePiCommands, PiRpcTimeoutError, sendPiRpcAndWait, wireTransportEvents } from './loop';
@@ -187,6 +187,12 @@ export function failPiHistoryOnRestoreError(error: unknown, failNativeStartup: (
 }
 
 export async function runPi(opts: {
+    /**
+     * Which Pi-family product this session runs. `pi` and `omp` share the RPC
+     * runtime but are distinct agents with distinct binaries, so the session
+     * metadata and the spawned command must always agree.
+     */
+    flavor?: 'pi' | 'omp';
     startedBy?: 'runner' | 'terminal';
     startingMode?: 'local' | 'remote';
     model?: string;
@@ -199,6 +205,8 @@ export async function runPi(opts: {
 } = {}): Promise<void> {
     const workingDirectory = opts.workingDirectory ?? getInvokedCwd();
     const startedBy = opts.startedBy ?? 'terminal';
+    const flavor = opts.flavor ?? 'pi';
+    const logPrefix = `[${flavor}]`;
     // Pi only runs as `pi --mode rpc` with piped stdio — there is no local
     // terminal/TUI input path (unlike Claude/Codex). Defaulting a terminal
     // launch to 'local' would mark the session local-controlled while the user
@@ -207,17 +215,17 @@ export async function runPi(opts: {
     // an explicit opts.startingMode (e.g. runner) still takes precedence.
     const startingMode: 'local' | 'remote' = opts.startingMode ?? 'remote';
 
-    logger.debug(`[pi] Starting with options: startedBy=${startedBy}, startingMode=${startingMode}`);
+    logger.debug(`${logPrefix} Starting with options: startedBy=${startedBy}, startingMode=${startingMode}`);
 
     const bootstrap = opts.existingSessionId
         ? await bootstrapExistingSession({
             sessionId: opts.existingSessionId,
-            flavor: 'pi',
+            flavor,
             startedBy,
             workingDirectory,
         })
         : await bootstrapSession({
-            flavor: 'pi',
+            flavor,
             startedBy,
             workingDirectory,
             // Do not seed the hub session model from opts.model: it is unconfirmed
@@ -249,7 +257,7 @@ export async function runPi(opts: {
         transportArgs.push('--session', opts.resumeSessionId);
     }
     const transport = new PiTransport({
-        command: resolvePiCommand(),
+        command: resolvePiFamilyCommand(flavor),
         args: transportArgs,
         cwd: workingDirectory,
         env: process.env,
@@ -295,7 +303,7 @@ export async function runPi(opts: {
     let killedByCleanup = false;
     const lifecycle = createRunnerLifecycle({
         session: apiSession,
-        logTag: 'pi',
+        logTag: flavor,
         stopKeepAlive: () => piSession.stopKeepAlive(),
         onAfterClose: () => {
             piSession.stopKeepAlive();
@@ -342,7 +350,7 @@ export async function runPi(opts: {
         transportEvents?.flush();
         transportEvents?.cancelPendingExtensionUi('Pi transport failed', { sendResponse: false });
         transportEvents?.terminatePendingRpc(error);
-        logger.debug(`[pi] Transport error: ${error.message}`);
+        logger.debug(`${logPrefix} Transport error: ${error.message}`);
         lifecycle.markCrash(error);
         lifecycle.setExitCode(1);
         lifecycle.setArchiveReason(error.message.slice(0, 200));
@@ -356,14 +364,14 @@ export async function runPi(opts: {
         transportEvents?.cancelPendingExtensionUi('Pi session ended', { sendResponse: false });
         transportEvents?.terminatePendingRpc(new Error('Pi session ended'));
         if (killedByCleanup) {
-            logger.debug(`[pi] Pi process closed during lifecycle cleanup (code=${code}, signal=${signal})`);
+            logger.debug(`${logPrefix} Pi process closed during lifecycle cleanup (code=${code}, signal=${signal})`);
             void safeCleanup();
             return;
         }
         const reason = signal
             ? `Pi process killed by signal ${signal}`
             : `Pi process exited with code ${code ?? 'null'}`;
-        logger.debug(`[pi] ${reason}`);
+        logger.debug(`${logPrefix} ${reason}`);
         lifecycle.markCrash(new Error(reason));
         lifecycle.setExitCode(1);
         lifecycle.setArchiveReason(reason.slice(0, 200));
@@ -384,7 +392,7 @@ export async function runPi(opts: {
         if (result.success) {
             startupThinkingLevel = result.data;
         } else {
-            logger.debug(`[pi] Ignoring invalid effort value on resume: ${opts.effort}`);
+            logger.debug(`${logPrefix} Ignoring invalid effort value on resume: ${opts.effort}`);
         }
     }
 
@@ -392,7 +400,7 @@ export async function runPi(opts: {
         // A wrapper socket can already be active while Pi rejects --session.
         // End this process immediately so the hub's Pi-ready wait fails and
         // an archived HAPI row is restored rather than shown as reopened.
-        logger.debug(`[pi] Native startup failed: ${error.message}`);
+        logger.debug(`${logPrefix} Native startup failed: ${error.message}`);
         lifecycle.markCrash(error);
         lifecycle.setExitCode(1);
         lifecycle.setArchiveReason(error.message.slice(0, 200));
@@ -572,7 +580,7 @@ export async function runPi(opts: {
                     // an unexpected rejection leaving an unhandled promise
                     // rejection, and always keeps the pump unblocked via the
                     // finally below.
-                    logger.warn(`[pi] Special command ${dequeued.command.type} failed unexpectedly: ${error instanceof Error ? error.message : String(error)}`);
+                    logger.warn(`${logPrefix} Special command ${dequeued.command.type} failed unexpectedly: ${error instanceof Error ? error.message : String(error)}`);
                 })
                 .finally(() => {
                     piSpecialCommandInFlight = false;
@@ -748,7 +756,7 @@ export async function runPi(opts: {
             throw new Error('Invalid session config payload');
         }
         const config = parsed.data;
-        logger.debug(`[pi] SetSessionConfig received: ${JSON.stringify(config)}`);
+        logger.debug(`${logPrefix} SetSessionConfig received: ${JSON.stringify(config)}`);
 
         // Resolve requested values WITHOUT mutating PiSession yet. Commit them
         // only after Pi confirms via sendPiRpcAndWait, otherwise a rejected
@@ -758,7 +766,7 @@ export async function runPi(opts: {
         let requestedModel: { modelId: string | null; provider: string | null } | undefined;
         if (config.model !== undefined) {
             const modelValue = config.model;
-            logger.debug(`[pi] SetSessionConfig model: ${JSON.stringify(modelValue)}`);
+            logger.debug(`${logPrefix} SetSessionConfig model: ${JSON.stringify(modelValue)}`);
 
             if (modelValue === null) {
                 requestedModel = { modelId: null, provider: null };
@@ -772,7 +780,7 @@ export async function runPi(opts: {
                 // { provider, modelId } form
                 requestedModel = { modelId: modelValue.modelId, provider: modelValue.provider };
             }
-            logger.debug(`[pi] SetSessionConfig resolved: model=${requestedModel.modelId}, provider=${requestedModel.provider}`);
+            logger.debug(`${logPrefix} SetSessionConfig resolved: model=${requestedModel.modelId}, provider=${requestedModel.provider}`);
         }
         let requestedThinkingLevel: PiThinkingLevel | null | undefined;
         if (config.effort !== undefined) {
@@ -808,7 +816,7 @@ export async function runPi(opts: {
                         // set_model — contradicting the "await Pi confirmation" contract above.
                         // Throw so the hub returns 409 and the web client can retry once the
                         // provider is known.
-                        logger.debug('[pi] set_model suppressed: provider unknown until get_state');
+                        logger.debug(`${logPrefix} set_model suppressed: provider unknown until get_state`);
                         throw new Error('Model cannot be applied yet: provider is not yet known');
                     } else if (requestedModel.modelId === null) {
                         // Clearing the model needs no Pi RPC (nothing to confirm), so commit
@@ -866,7 +874,7 @@ export async function runPi(opts: {
                 }
                 return { success: true, availableModels: models, currentModelId: piSession.currentModel };
             } catch (error) {
-                logger.debug('[pi] ListPiModels RPC failed:', error);
+                logger.debug(`${logPrefix} ListPiModels RPC failed:`, error);
                 return {
                     success: false,
                     error: error instanceof Error ? error.message : 'Failed to list Pi models',
@@ -912,7 +920,7 @@ export async function runPi(opts: {
                 // templates, and skills — never its TUI builtins. Merge the
                 // HAPI-side builtin list (the subset translatable to Pi RPC)
                 // so the web / menu exposes /compact, /session, /model, /help.
-                commands: mergeSlashCommands([...getBuiltinSlashCommands('pi'), ...slashCommands]),
+                commands: mergeSlashCommands([...getBuiltinSlashCommands(flavor), ...slashCommands]),
             };
         }
     );
@@ -1444,7 +1452,7 @@ export async function runPi(opts: {
         if (piSession.expectedNativeSessionId) {
             failNativeStartup(new Error(`Pi native resume did not become ready within ${PI_READY_FALLBACK_MS}ms`));
         } else {
-            logger.debug('[pi] get_state ready signal not seen within grace — establishing history baseline before draining buffered messages');
+            logger.debug(`${logPrefix} get_state ready signal not seen within grace — establishing history baseline before draining buffered messages`);
             void initializeHistoryBaseline()
                 .catch(() => {})
                 .finally(() => {
@@ -1487,13 +1495,13 @@ export async function runPi(opts: {
                         piSession.currentThinkingLevel = startupThinkingLevel;
                         piSession.pushKeepAlive();
                     }, { poisonOnError: (error) => error instanceof PiRpcTimeoutError });
-                    logger.debug(`[pi] Startup effort applied: ${startupThinkingLevel}`);
+                    logger.debug(`${logPrefix} Startup effort applied: ${startupThinkingLevel}`);
                 } catch (error) {
                     if (error instanceof PiRpcTimeoutError) {
                         failNativeStartup(new Error(`Pi startup effort outcome is indeterminate: ${error.message}`));
                         return;
                     }
-                    logger.debug(`[pi] Startup effort rejected, keeping Pi default: ${error instanceof Error ? error.message : String(error)}`);
+                    logger.debug(`${logPrefix} Startup effort rejected, keeping Pi default: ${error instanceof Error ? error.message : String(error)}`);
                 }
             })();
         }
@@ -1504,7 +1512,7 @@ export async function runPi(opts: {
         crashed = true;
         lifecycle.markCrash(error);
         lifecycle.setSessionEndReason('error');
-        logger.debug('[pi] Loop error:', error);
+        logger.debug(`${logPrefix} Loop error:`, error);
     } finally {
         clearTimeout(readyFallback);
         if (!crashed && !lifecycle.hasExplicitSessionEndReason()) {

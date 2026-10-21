@@ -1,38 +1,33 @@
-import { resolveExecutable } from '@/agent/agentLaunchCommand'
+import type { PiFamilyFlavor } from '@hapi/protocol'
 
 type LaunchEnvironment = Record<string, string | undefined>
 
 /**
- * Binary names that ship the same Pi coding agent.
+ * Launcher + override per Pi-family flavor. The two flavors are separate
+ * products with separate release lines, so neither may stand in for the other:
  *
- * `@oh-my-pi/pi-coding-agent` publishes its CLI as `omp` only, so a machine
- * that installed OMP has no `pi` on PATH even though it is the identical agent:
- * `omp --mode rpc` answers the same `ready`/protocol handshake, loads the
- * `--extension` file the launcher passes, and serves the same RPC commands the
- * Pi session uses. Without this alias such a machine reports Pi as `not_found`
- * in the create-session form and cannot start Pi sessions at all.
- */
-const PI_COMMANDS = ['pi', 'omp'] as const
-
-const DEFAULT_PI_COMMAND = PI_COMMANDS[0]
-
-/**
- * Resolves the Pi CLI to the name that will be spawned: `HAPI_PI_PATH` wins,
- * then the canonical `pi`, then the aliases above. Falls back to `pi` when
- * nothing is on PATH so the availability preflight can report the canonical
- * name as missing instead of an alias.
+ * - `pi`  — `@mariozechner/pi-coding-agent` (badlogic/pi-mono), binary `pi`
+ * - `omp` — `@oh-my-pi/pi-coding-agent` (can1357/oh-my-pi), binary `omp`
+ *
+ * Resolving `omp` for a Pi session used to paper over an omp-only machine, but
+ * the binaries diverge (omp rejects `--no-prompt-templates` and reports
+ * thinking levels as `thinking.efforts`, not `thinkingLevelMap`), so a session
+ * labelled Pi silently ran a different agent.
  *
  * Returns the command *name* rather than an absolute path: every call site
- * spawns with the process environment, matching what `resolveExecutable` just
- * probed. The availability preflight and the launchers share this function so
- * the agent shown as available is the agent that gets started.
+ * spawns with the process environment, matching what `resolveExecutable` probes
+ * in the availability preflight so the agent shown as available is the agent
+ * that gets started.
  */
-export function resolvePiCommand(env: LaunchEnvironment = process.env): string {
-    const configured = env.HAPI_PI_PATH?.trim()
-    if (configured) return configured
-    for (const command of PI_COMMANDS) {
-        const resolved = resolveExecutable(command, { pathValue: env.PATH, pathExt: env.PATHEXT })
-        if (resolved) return command
-    }
-    return DEFAULT_PI_COMMAND
+const PI_FAMILY_COMMANDS: Record<PiFamilyFlavor, { command: string; pathEnv: string }> = {
+    pi: { command: 'pi', pathEnv: 'HAPI_PI_PATH' },
+    omp: { command: 'omp', pathEnv: 'HAPI_OMP_PATH' },
+}
+
+export function resolvePiFamilyCommand(
+    flavor: PiFamilyFlavor = 'pi',
+    env: LaunchEnvironment = process.env,
+): string {
+    const spec = PI_FAMILY_COMMANDS[flavor]
+    return env[spec.pathEnv]?.trim() || spec.command
 }

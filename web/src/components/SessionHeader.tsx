@@ -1,3 +1,4 @@
+import { isPiFamilyFlavor } from '@hapi/protocol'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useIsMutating, useQueryClient } from '@tanstack/react-query'
 import type { Session } from '@/types/api'
@@ -183,7 +184,7 @@ export function SessionHeader(props: {
     const codexSessionId = session.metadata?.flavor === 'codex'
         ? session.metadata.codexSessionId?.trim() || null
         : null
-    const piSessionId = session.metadata?.flavor === 'pi'
+    const piSessionId = isPiFamilyFlavor(session.metadata?.flavor)
         ? session.metadata.piSessionId?.trim() || null
         : null
     const { machines } = useMachines(api, Boolean(api))

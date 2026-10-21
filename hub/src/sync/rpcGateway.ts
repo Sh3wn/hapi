@@ -598,8 +598,8 @@ export class RpcGateway {
         return await this.machineRpc(machineId, RPC_METHODS.ListAgyModels, params, MODEL_LIST_RPC_TIMEOUT_MS) as RpcListAgyModelsResponse
     }
 
-    async listPiModelsForMachine(machineId: string): Promise<RpcListPiModelsResponse> {
-        return await this.machineRpc(machineId, RPC_METHODS.ListPiModelsForMachine, {}, MODEL_LIST_RPC_TIMEOUT_MS) as RpcListPiModelsResponse
+    async listPiModelsForMachine(machineId: string, flavor: 'pi' | 'omp' = 'pi'): Promise<RpcListPiModelsResponse> {
+        return await this.machineRpc(machineId, RPC_METHODS.ListPiModelsForMachine, { flavor }, MODEL_LIST_RPC_TIMEOUT_MS) as RpcListPiModelsResponse
     }
 
     private async sessionRpc(

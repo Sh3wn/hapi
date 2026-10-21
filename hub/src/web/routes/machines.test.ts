@@ -187,16 +187,20 @@ describe('machines routes', () => {
 
     it('returns Pi models for an online machine', async () => {
         const machine = createMachine()
+        const requestedFlavors: Array<string | undefined> = []
         const engine = {
             getMachine: () => machine,
             getMachineByNamespace: () => machine,
-            listPiModelsForMachine: async () => ({
-                success: true,
-                availableModels: [
-                    { provider: 'openai-codex', modelId: 'gpt-5.6-sol', reasoning: true }
-                ],
-                currentModelId: null
-            })
+            listPiModelsForMachine: async (_machineId: string, flavor?: string) => {
+                requestedFlavors.push(flavor)
+                return {
+                    success: true,
+                    availableModels: [
+                        { provider: 'openai-codex', modelId: 'gpt-5.6-sol', reasoning: true }
+                    ],
+                    currentModelId: null
+                }
+            }
         } as Partial<SyncEngine>
 
         const app = new Hono<WebAppEnv>()
@@ -216,6 +220,35 @@ describe('machines routes', () => {
             ],
             currentModelId: null
         })
+        expect(requestedFlavors).toEqual(['pi'])
+    })
+
+    it('probes the requested Pi-family flavor and rejects unknown ones', async () => {
+        const machine = createMachine()
+        const requestedFlavors: Array<string | undefined> = []
+        const engine = {
+            getMachine: () => machine,
+            getMachineByNamespace: () => machine,
+            listPiModelsForMachine: async (_machineId: string, flavor?: string) => {
+                requestedFlavors.push(flavor)
+                return { success: true, availableModels: [], currentModelId: null }
+            }
+        } as Partial<SyncEngine>
+
+        const app = new Hono<WebAppEnv>()
+        app.use('*', async (c, next) => {
+            c.set('namespace', 'default')
+            await next()
+        })
+        app.route('/api', createMachinesRoutes(() => engine as SyncEngine))
+
+        const ompResponse = await app.request('/api/machines/machine-1/pi-models?flavor=omp')
+        expect(ompResponse.status).toBe(200)
+        expect(requestedFlavors).toEqual(['omp'])
+
+        const invalidResponse = await app.request('/api/machines/machine-1/pi-models?flavor=claude')
+        expect(invalidResponse.status).toBe(400)
+        expect(requestedFlavors).toEqual(['omp'])
     })
 
     it('returns a stable code when the Codex machine RPC target is absent', async () => {

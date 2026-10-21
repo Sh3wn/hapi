@@ -1,5 +1,16 @@
 import type { SlashCommand } from './apiTypes'
 
+// Pi runs `pi --mode rpc` over stdio; only commands HAPI can translate to Pi
+// RPC calls are listed. Terminal-only Pi builtins (e.g. /tree, /export,
+// /reload) are intercepted with an explicit "not supported" message instead of
+// being passed to the model as plain text. OMP shares the same vocabulary.
+const PI_BUILTIN_SLASH_COMMANDS = [
+    { name: 'help', description: 'Show supported HAPI Pi slash commands', source: 'builtin' },
+    { name: 'compact', description: 'Compress conversation history to save context (optional custom instructions)', source: 'builtin' },
+    { name: 'session', description: 'Show Pi session stats (tokens, cost, context usage)', source: 'builtin' },
+    { name: 'model', description: 'Show or switch the Pi model, e.g. /model gpt-5.2', source: 'builtin' },
+] as const satisfies readonly SlashCommand[]
+
 export const BUILTIN_SLASH_COMMANDS = {
     claude: [
         { name: 'clear', description: 'Clear conversation history and free up context', source: 'builtin' },
@@ -75,16 +86,9 @@ export const BUILTIN_SLASH_COMMANDS = {
         { name: 'usage', description: 'Show session usage metrics', source: 'builtin' },
     ],
     kimi: [],
-    // Pi runs `pi --mode rpc` over stdio; only commands HAPI can translate
-    // to Pi RPC calls are listed. Terminal-only Pi builtins (e.g. /tree,
-    // /export, /reload) are intercepted with an explicit "not supported"
-    // message instead of being passed to the model as plain text.
-    pi: [
-        { name: 'help', description: 'Show supported HAPI Pi slash commands', source: 'builtin' },
-        { name: 'compact', description: 'Compress conversation history to save context (optional custom instructions)', source: 'builtin' },
-        { name: 'session', description: 'Show Pi session stats (tokens, cost, context usage)', source: 'builtin' },
-        { name: 'model', description: 'Show or switch the Pi model, e.g. /model gpt-5.2', source: 'builtin' },
-    ],
+    pi: PI_BUILTIN_SLASH_COMMANDS,
+    // OMP speaks the same RPC vocabulary, so it exposes the same HAPI-translatable set.
+    omp: PI_BUILTIN_SLASH_COMMANDS,
 } as const satisfies Record<string, readonly SlashCommand[]>
 
 export function getBuiltinSlashCommands(agent: string): SlashCommand[] {

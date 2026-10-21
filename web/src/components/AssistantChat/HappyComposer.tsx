@@ -38,7 +38,7 @@ import { useActiveSuggestions } from '@/hooks/useActiveSuggestions'
 import { applySuggestion } from '@/utils/applySuggestion'
 import { usePlatform } from '@/hooks/usePlatform'
 import { usePWAInstall } from '@/hooks/usePWAInstall'
-import { supportsEffort, supportsModelChange, PI_THINKING_LEVEL_LABELS } from '@hapi/protocol'
+import { supportsEffort, supportsModelChange, PI_THINKING_LEVEL_LABELS, isPiFamilyFlavor } from '@hapi/protocol'
 import type { PiThinkingLevel } from '@hapi/protocol'
 import { markSkillUsed } from '@/lib/recent-skills'
 import { useComposerDraft } from '@/hooks/useComposerDraft'
@@ -1094,7 +1094,7 @@ export function HappyComposer(props: {
         }
     }, [selectedPiModel, effort, onEffortChange])
     const claudeEffortOptions = useMemo(
-        () => agentFlavor === 'pi'
+        () => isPiFamilyFlavor(agentFlavor)
             ? getPiThinkingLevelOptions(effort, selectedPiModel?.thinkingLevelMap)
             : agentFlavor === 'grok' && availableEffortOptions && availableEffortOptions.length > 0
                 ? [
@@ -1376,7 +1376,7 @@ export function HappyComposer(props: {
             // would lose the provider and can pick the wrong cached match or clear
             // the model. Pi model changes go through the settings sheet's
             // provider-qualified picker (piModelGroups) only.
-            if (agentFlavor === 'pi') return
+            if (isPiFamilyFlavor(agentFlavor)) return
             if (e.key === 'm' && (e.metaKey || e.ctrlKey) && onModelChange && supportsModelChange(agentFlavor)) {
                 e.preventDefault()
                 onModelChange(getNextModelForFlavor(agentFlavor, model, availableModelOptions))
@@ -1590,7 +1590,7 @@ export function HappyComposer(props: {
     const showCollaborationSettings = Boolean(onCollaborationModeChange && collaborationModeOptions.length > 0)
     const showCopilotAgentModeSettings = Boolean(onCopilotAgentModeChange && copilotAgentModeOptions.length > 0)
     const showPermissionSettings = Boolean(onPermissionModeChange && permissionModeOptions.length > 0)
-    const showModelSettings = agentFlavor === 'pi'
+    const showModelSettings = isPiFamilyFlavor(agentFlavor)
         // Pi models only come from the dynamic piModels catalog; never fall
         // back to the generic synthesized modelOptions rows (they would post a
         // bare model id the Pi runner cannot resolve to a provider).
@@ -1608,7 +1608,7 @@ export function HappyComposer(props: {
     // For Pi: hide effort while the selected model is unresolved (catalog
     // still loading/failed) or explicitly has reasoning: false — the generic
     // fallback levels would mutate a set_thinking_level the model may reject.
-    const piEffortUnavailable = agentFlavor === 'pi'
+    const piEffortUnavailable = isPiFamilyFlavor(agentFlavor)
         && (!selectedPiModel || selectedPiModel.reasoning === false)
     const showEffortSettings = Boolean(onEffortChange && supportsEffort(agentFlavor) && !piEffortUnavailable)
     const showFastModeSettings = Boolean(onServiceTierChange)
@@ -1666,7 +1666,7 @@ export function HappyComposer(props: {
     // Pi turns run for minutes with thread.isDisabled set the whole time, so
     // Pi keeps its model/effort controls live mid-turn (#1442) — the generic
     // disable rule (controlsDisabled) would lock them for the entire turn.
-    const modelEffortControlsDisabled = agentFlavor === 'pi' ? configurationControlsDisabled : controlsDisabled
+    const modelEffortControlsDisabled = isPiFamilyFlavor(agentFlavor) ? configurationControlsDisabled : controlsDisabled
     const modelValueLabel = useMemo(() => {
         if (isNarrowViewport) return undefined
         if (!onModelChange || !supportsModelChange(agentFlavor)) return undefined
@@ -1674,7 +1674,7 @@ export function HappyComposer(props: {
         // provider-qualified selection name. No button until the catalog
         // resolves: a bare session model id has no provider and the sheet
         // would have no Model section to open anyway.
-        if (agentFlavor === 'pi') {
+        if (isPiFamilyFlavor(agentFlavor)) {
             if (!selectedPiModel) return undefined
             return selectedPiModel.name ?? selectedPiModel.modelId
         }
@@ -1691,7 +1691,7 @@ export function HappyComposer(props: {
         if (!onEffortChange || !supportsEffort(agentFlavor)) return undefined
         // Pi: without a resolved catalog entry there is no capability map to
         // derive levels from; hide the button until the selected model is known.
-        if (agentFlavor === 'pi') {
+        if (isPiFamilyFlavor(agentFlavor)) {
             if (!selectedPiModel || selectedPiModel.reasoning === false) return undefined
             const effectiveLevel = effort && isThinkingLevelSupported(effort, selectedPiModel?.thinkingLevelMap)
                 ? effort
@@ -1750,7 +1750,7 @@ export function HappyComposer(props: {
                                 <div className="px-3 pb-1 text-xs font-semibold text-[var(--app-hint)]">
                                     {t('misc.model')}
                                 </div>
-                                {agentFlavor === 'pi'
+                                {isPiFamilyFlavor(agentFlavor)
                                     ? piModelGroups?.map((group) => (
                                         <div key={group.provider}>
                                             <div className="px-3 pt-2 pb-0.5 text-xs font-medium text-[var(--app-hint)]">
@@ -1920,7 +1920,7 @@ export function HappyComposer(props: {
                                                 : 'cursor-pointer hover:bg-[var(--app-secondary-bg)]'
                                         }`}
                                         onClick={() => handleEffortChange(
-                                            agentFlavor === 'pi' && effort === option.value ? null : option.value
+                                            isPiFamilyFlavor(agentFlavor) && effort === option.value ? null : option.value
                                         )}
                                         onMouseDown={(e) => e.preventDefault()}
                                     >

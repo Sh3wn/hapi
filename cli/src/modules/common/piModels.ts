@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
-import { resolvePiCommand } from '../../pi/utils/piExecutable'
+import type { PiFamilyFlavor } from '@hapi/protocol'
+import { resolvePiFamilyCommand } from '../../pi/utils/piExecutable'
 import { homedir } from 'node:os'
 import { parse } from 'node:path'
 import type { PiModelSummary, PiModelsResponse } from '@hapi/protocol/apiTypes'
@@ -7,7 +8,10 @@ import { parsePiModels } from '../../pi/schemas'
 import { killProcessByChildProcess } from '../../utils/process'
 import { getErrorMessage } from './rpcResponses'
 
-export type ListPiModelsForMachineRequest = Record<string, never>
+export type ListPiModelsForMachineRequest = {
+    /** Pi-family product to probe. Defaults to `pi` for older callers. */
+    flavor?: PiFamilyFlavor
+}
 
 export type ListPiModelsForMachineResponse = PiModelsResponse
 
@@ -18,11 +22,13 @@ interface CacheEntry {
 
 const CACHE_TTL_MS = 60_000
 const PROBE_TIMEOUT_MS = 15_000
-const cache = new Map<string, CacheEntry>()
-const inflight = new Map<string, Promise<ListPiModelsForMachineResponse>>()
+const cache = new Map<PiFamilyFlavor, CacheEntry>()
+const inflight = new Map<PiFamilyFlavor, Promise<ListPiModelsForMachineResponse>>()
 
 /**
- * Machine-level Pi model discovery via a short-lived `pi --mode rpc` probe.
+ * Machine-level Pi-family model discovery via a short-lived `<binary> --mode
+ * rpc` probe. Each flavor probes its own binary: `pi` and `omp` are separate
+ * products and one must never stand in for the other.
  *
  * The previous `pi --list-models` text-table probe lost every field the
  * table does not print — most importantly `thinkingLevelMap`, so the
@@ -44,12 +50,11 @@ const inflight = new Map<string, Promise<ListPiModelsForMachineResponse>>()
  * loading is paid for. The probe still starts faster than the old table probe
  * (~2.1s vs ~1.6-2.4s measured, with a 60s cache in front of it).
  *
- * `--no-prompt-templates` is deliberately NOT passed even though real Pi
- * accepts it: the same agent also ships as `omp`
- * (@oh-my-pi/pi-coding-agent, see resolvePiCommand) and that build rejects the
- * flag with `unknown flag: --no-prompt-templates`, which would abort the probe
- * and leave the machine without a Pi model list. Prompt templates cannot
- * contribute models, so leaving them enabled only costs startup time.
+ * `--no-prompt-templates` is deliberately NOT passed: OMP rejects it with
+ * `unknown flag: --no-prompt-templates` in the Pi-family versions HAPI
+ * supports, which would abort the probe and leave the machine without a model
+ * list. Prompt templates cannot contribute models, so leaving them enabled
+ * only costs startup time.
  */
 const PI_PROBE_ARGS = [
     '--mode', 'rpc',
@@ -124,9 +129,9 @@ export function resolveProbeCwd(): string {
     return cwd === parse(cwd).root ? homedir() : cwd
 }
 
-function runPiModelsProbe(): Promise<ListPiModelsForMachineResponse> {
+function runPiModelsProbe(flavor: PiFamilyFlavor): Promise<ListPiModelsForMachineResponse> {
     return new Promise((resolve, reject) => {
-        const child = spawn(resolvePiCommand(), [...PI_PROBE_ARGS], {
+        const child = spawn(resolvePiFamilyCommand(flavor), [...PI_PROBE_ARGS], {
             env: process.env,
             // Probe from the runner's cwd, falling back to home at a
             // filesystem root (see resolveProbeCwd).
@@ -238,28 +243,30 @@ export function _resetPiModelsCacheForTests(): void {
     inflight.clear()
 }
 
-export async function listPiModelsForMachine(): Promise<ListPiModelsForMachineResponse> {
+export async function listPiModelsForMachine(
+    flavor: PiFamilyFlavor = 'pi',
+): Promise<ListPiModelsForMachineResponse> {
     const now = Date.now()
-    const cached = cache.get('default')
+    const cached = cache.get(flavor)
     if (cached && cached.expiresAt > now) {
         return cached.response
     }
 
-    const existing = inflight.get('default')
+    const existing = inflight.get(flavor)
     if (existing) {
         return existing
     }
 
-    const pending = runPiModelsProbe()
+    const pending = runPiModelsProbe(flavor)
         .then((response) => {
-            cache.set('default', { expiresAt: now + CACHE_TTL_MS, response })
-            inflight.delete('default')
+            cache.set(flavor, { expiresAt: now + CACHE_TTL_MS, response })
+            inflight.delete(flavor)
             return response
         })
         .catch((error) => {
-            inflight.delete('default')
+            inflight.delete(flavor)
             throw new Error(getErrorMessage(error, 'Failed to list Pi models'))
         })
-    inflight.set('default', pending)
+    inflight.set(flavor, pending)
     return pending
 }

@@ -26,11 +26,31 @@ describe('agent executable resolution', () => {
         })).toEqual({ agent: 'copilot', available: true })
     })
 
-    it('reports Pi as available when only the omp alias is installed', async () => {
+    it('reports Pi and OMP independently instead of aliasing the binary', async () => {
         const directory = await mkdtemp(join(tmpdir(), 'hapi-agent-path-'))
         await makeExecutable(directory, 'omp')
 
-        expect(getAgentAvailability('pi', { PATH: directory })).toEqual({ agent: 'pi', available: true })
+        expect(getAgentAvailability('pi', { PATH: directory })).toEqual({
+            agent: 'pi',
+            available: false,
+            reason: 'not_found',
+        })
+        expect(getAgentAvailability('omp', { PATH: directory })).toEqual({ agent: 'omp', available: true })
+    })
+
+    it('honors the per-flavor path override', async () => {
+        const directory = await mkdtemp(join(tmpdir(), 'hapi-agent-path-'))
+        const customOmp = await makeExecutable(directory, 'omp-custom')
+
+        expect(getAgentAvailability('omp', { PATH: '', HAPI_OMP_PATH: customOmp })).toEqual({
+            agent: 'omp',
+            available: true,
+        })
+        expect(getAgentAvailability('omp', { PATH: '' })).toEqual({
+            agent: 'omp',
+            available: false,
+            reason: 'not_found',
+        })
     })
 
     it('honors HAPI_PI_PATH and reports Pi as missing without a Pi binary', async () => {

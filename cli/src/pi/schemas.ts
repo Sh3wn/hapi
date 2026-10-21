@@ -52,6 +52,27 @@ const asOptThinkingLevelMap = z.unknown().optional().transform((v): Record<strin
     return Object.keys(map).length > 0 ? map : undefined;
 });
 
+/**
+ * Derive the thinking-level map from OMP's `thinking.efforts`.
+ *
+ * Pi publishes a per-model `thinkingLevelMap`; OMP does not. OMP models
+ * declare the accepted ladder as `thinking: { mode: 'effort', efforts: [...] }`
+ * and the resolver always prepends `off` (`[Off, ...efforts]`). Without this
+ * translation the web picker hides levels the model actually accepts (DeepSeek
+ * V4.1 Flash lists `max`) and offers levels it rejects (`minimal`, `medium`).
+ */
+const asOptThinkingLevelMapFromEfforts = z.unknown().optional().transform((v): Record<string, string | null> | undefined => {
+    if (typeof v !== 'object' || v === null) return undefined;
+    const efforts = (v as Record<string, unknown>).efforts;
+    if (!Array.isArray(efforts)) return undefined;
+    const accepted = new Set(efforts.filter((effort): effort is string => typeof effort === 'string'));
+    if (accepted.size === 0) return undefined;
+    accepted.add('off');
+    return Object.fromEntries(
+        PI_THINKING_LEVELS.map((level) => [level, accepted.has(level) ? level : null]),
+    );
+});
+
 // ============================================================================
 // Pi Agent Event (stdin JSONL → event)
 // ============================================================================
@@ -289,13 +310,15 @@ const PiModelEntrySchema = z.object({
     contextWindow: asOptNum,
     reasoning: asOptBool,
     thinkingLevelMap: asOptThinkingLevelMap,
+    thinking: asOptThinkingLevelMapFromEfforts,
 }).passthrough().transform((m): PiModelSummary | null => {
     if (!m.id) return null;
     const entry: PiModelSummary = { provider: m.provider, modelId: m.id };
     if (m.name !== undefined) entry.name = m.name;
     if (m.contextWindow !== undefined) entry.contextWindow = m.contextWindow;
     if (m.reasoning !== undefined) entry.reasoning = m.reasoning;
-    if (m.thinkingLevelMap !== undefined) entry.thinkingLevelMap = m.thinkingLevelMap;
+    const thinkingLevelMap = m.thinkingLevelMap ?? m.thinking;
+    if (thinkingLevelMap !== undefined) entry.thinkingLevelMap = thinkingLevelMap;
     return entry;
 });
 

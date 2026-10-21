@@ -13,6 +13,7 @@ import { kimiCommand } from './kimi'
 import { copilotCommand } from './copilot'
 import { grokCommand } from './grok'
 import { opencodeCommand } from './opencode'
+import { ompCommand } from './omp'
 import { piCommand } from './pi'
 import { hookForwarderCommand } from './hookForwarder'
 import { mcpCommand } from './mcp'
@@ -51,6 +52,7 @@ const COMMANDS: CommandDefinition[] = [
     kimiCommand,
     copilotCommand,
     opencodeCommand,
+    ompCommand,
     piCommand,
     mcpCommand,
     mcpProxyCommand,

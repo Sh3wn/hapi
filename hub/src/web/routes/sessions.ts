@@ -23,6 +23,7 @@ import {
     UpdateSessionSummaryRequestSchema,
     supportsModelChange,
     supportsEffort,
+    isPiFamilyFlavor,
     toSessionSummary,
     UploadFileRequestSchema
 } from '@hapi/protocol'
@@ -1570,8 +1571,8 @@ export function createSessionsRoutes(getSyncEngine: () => SyncEngine | null): Ho
         if (sessionResult instanceof Response) return sessionResult
 
         const flavor = sessionResult.session.metadata?.flavor ?? 'claude'
-        if (flavor !== 'pi') {
-            return c.json({ success: false, error: 'Not a Pi session' }, 400)
+        if (!isPiFamilyFlavor(flavor)) {
+            return c.json({ success: false, error: 'Not a Pi-family session' }, 400)
         }
 
         try {

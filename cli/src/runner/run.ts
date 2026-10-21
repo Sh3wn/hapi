@@ -1975,7 +1975,9 @@ export function buildCliArgs(
               ? 'dsh'
               : agent === 'pi'
                 ? 'pi'
-                : agent === 'agy'
+                : agent === 'omp'
+                  ? 'omp'
+                  : agent === 'agy'
                   ? 'agy'
                   : 'claude';
   const args = [agentCommand];
@@ -1984,8 +1986,8 @@ export function buildCliArgs(
       args.push('resume', options.resumeSessionId);
     } else if (agent === 'cursor') {
       args.push('--resume', options.resumeSessionId);
-    } else if (agent === 'pi') {
-      // Pi uses --session-id for exact session resume (RPC mode)
+    } else if (agent === 'pi' || agent === 'omp') {
+      // Pi-family uses --session-id for exact session resume (RPC mode)
       args.push('--session-id', options.resumeSessionId);
     } else {
       args.push('--resume', options.resumeSessionId);
@@ -2018,7 +2020,7 @@ export function buildCliArgs(
   if (options.model) {
     args.push('--model', options.model);
   }
-  if (options.effort && (agent === 'claude' || agent === 'grok' || agent === 'pi' || agent === 'agy')) {
+  if (options.effort && (agent === 'claude' || agent === 'grok' || agent === 'pi' || agent === 'omp' || agent === 'agy')) {
     args.push('--effort', options.effort);
   }
   if (options.modelReasoningEffort && (agent === 'codex' || agent === 'opencode')) {
@@ -2033,9 +2035,9 @@ export function buildCliArgs(
   if (options.copilotAgentMode && options.copilotAgentMode !== 'interactive' && agent === 'copilot') {
     args.push('--copilot-agent-mode', options.copilotAgentMode);
   }
-  // Pi RPC mode has no permission switching; never pass these flags to it
-  // (the Pi parser rejects --permission-mode and ignores --yolo).
-  if (agent !== 'pi' && agent !== 'dsh') {
+  // Pi-family RPC mode has no permission switching; never pass these flags to
+  // it (the Pi parser rejects --permission-mode and ignores --yolo).
+  if (agent !== 'pi' && agent !== 'omp' && agent !== 'dsh') {
     if (options.permissionMode && (PERMISSION_MODES as readonly string[]).includes(options.permissionMode)) {
       args.push('--permission-mode', options.permissionMode);
     } else if (yolo) {

@@ -7,9 +7,28 @@ import { z } from 'zod'
  */
 export const AGENT_MESSAGE_PAYLOAD_TYPE = 'codex' as const
 
-export const AGENT_FLAVORS = ['agy', 'claude', 'codex', 'dsh', 'copilot', 'cursor', 'gemini', 'grok', 'kimi', 'opencode', 'pi'] as const
+export const AGENT_FLAVORS = ['agy', 'claude', 'codex', 'dsh', 'copilot', 'cursor', 'gemini', 'grok', 'kimi', 'opencode', 'omp', 'pi'] as const
 export type AgentFlavor = typeof AGENT_FLAVORS[number]
 export const AgentFlavorSchema = z.enum(AGENT_FLAVORS)
+
+/**
+ * Flavors that speak the Pi RPC protocol (`<binary> --mode rpc`, JSON lines
+ * over stdio). They share the CLI runtime (session bootstrap, transport,
+ * message conversion, steering, native resume) but are distinct products:
+ *
+ * - `pi`  — `@mariozechner/pi-coding-agent` (badlogic/pi-mono), binary `pi`
+ * - `omp` — `@oh-my-pi/pi-coding-agent` (can1357/oh-my-pi), binary `omp`
+ *
+ * Never resolve one binary as the other: the two release lines diverge in
+ * flags and RPC payloads (omp has no `thinkingLevelMap` and reports accepted
+ * thinking levels via `thinking.efforts` instead).
+ */
+export const PI_FAMILY_FLAVORS = ['pi', 'omp'] as const
+export type PiFamilyFlavor = typeof PI_FAMILY_FLAVORS[number]
+
+export function isPiFamilyFlavor(flavor?: string | null): flavor is PiFamilyFlavor {
+    return flavor === 'pi' || flavor === 'omp'
+}
 
 // Flavors offered when CREATING a new session. Gemini CLI is intentionally
 // excluded: Google sunset the consumer Gemini CLI (2026-06-18) so it can no
@@ -157,7 +176,7 @@ export function getPermissionModesForFlavor(flavor?: string | null): readonly Pe
     if (flavor === 'cursor') {
         return CURSOR_PERMISSION_MODES
     }
-    if (flavor === 'pi') {
+    if (isPiFamilyFlavor(flavor)) {
         // Pi RPC mode has no runtime permission switching (always auto-approve);
         // no permission modes are offered.
         return []
@@ -202,7 +221,7 @@ export function getCodexCollaborationModeOptions(): CodexCollaborationModeOption
  *
  * Claude / others: not supported (no reachable soft-steer path) — UI hides Steer.
  */
-export const STEERING_SUPPORTED_FLAVORS = ['codex', 'cursor', 'pi'] as const
+export const STEERING_SUPPORTED_FLAVORS = ['codex', 'cursor', 'pi', 'omp'] as const
 
 export function isSteeringSupportedForFlavor(flavor?: string | null): boolean {
     return (STEERING_SUPPORTED_FLAVORS as readonly string[]).includes(flavor ?? '')
@@ -221,7 +240,7 @@ export function isSteeringSupportedForSession(metadata?: {
     cursorSessionId?: string | null
     cursorSessionProtocol?: 'acp' | 'stream-json' | null
 } | null): boolean {
-    if (metadata?.flavor === 'codex' || metadata?.flavor === 'pi') {
+    if (metadata?.flavor === 'codex' || isPiFamilyFlavor(metadata?.flavor)) {
         return true
     }
     if (metadata?.flavor !== 'cursor') {

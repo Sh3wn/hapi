@@ -159,6 +159,8 @@ const AGENT_SESSION_ID_FIELD_BY_FLAVOR: Partial<Record<AgentFlavor, keyof Metada
     cursor: 'cursorSessionId',
     kimi: 'kimiSessionId',
     copilot: 'copilotSessionId',
+    // OMP keeps the Pi-protocol native session field.
+    omp: 'piSessionId',
     pi: 'piSessionId'
 }
 

@@ -180,9 +180,10 @@ async function dispatchLocalResume(target: LocalResumeTarget): Promise<void> {
         return
     }
 
-    if (target.flavor === 'pi') {
+    if (target.flavor === 'pi' || target.flavor === 'omp') {
         const { runPi } = await import('@/pi/runPi')
         await runPi({
+            flavor: target.flavor,
             existingSessionId: base.existingSessionId,
             workingDirectory: base.workingDirectory,
             resumeSessionId: base.resumeSessionId,

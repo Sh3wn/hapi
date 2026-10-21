@@ -2,7 +2,7 @@ import { chmod, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { resolvePiCommand } from './piExecutable'
+import { resolvePiFamilyCommand } from './piExecutable'
 
 async function makeExecutable(directory: string, name: string): Promise<string> {
     const path = join(directory, name)
@@ -11,35 +11,34 @@ async function makeExecutable(directory: string, name: string): Promise<string> 
     return path
 }
 
-describe('resolvePiCommand', () => {
-    it('prefers the canonical pi binary over the omp alias', async () => {
+describe('resolvePiFamilyCommand', () => {
+    it('resolves each flavor to its own binary', async () => {
         const directory = await mkdtemp(join(tmpdir(), 'hapi-pi-path-'))
         await makeExecutable(directory, 'pi')
         await makeExecutable(directory, 'omp')
 
-        expect(resolvePiCommand({ PATH: directory })).toBe('pi')
+        expect(resolvePiFamilyCommand('pi', { PATH: directory })).toBe('pi')
+        expect(resolvePiFamilyCommand('omp', { PATH: directory })).toBe('omp')
     })
 
-    it('falls back to the omp alias so an OMP-only machine can start Pi sessions', async () => {
+    it('never substitutes the other flavor when its own binary is missing', async () => {
         const directory = await mkdtemp(join(tmpdir(), 'hapi-pi-path-'))
         await makeExecutable(directory, 'omp')
 
-        expect(resolvePiCommand({ PATH: directory })).toBe('omp')
+        expect(resolvePiFamilyCommand('pi', { PATH: directory })).toBe('pi')
+        expect(resolvePiFamilyCommand('omp', { PATH: '' })).toBe('omp')
     })
 
-    it('uses HAPI_PI_PATH as-is and ignores a blank override', async () => {
+    it('honors the per-flavor path override and ignores a blank one', async () => {
         const directory = await mkdtemp(join(tmpdir(), 'hapi-pi-path-'))
-        const custom = await makeExecutable(directory, 'pi-custom')
-        await makeExecutable(directory, 'pi')
+        const customPi = await makeExecutable(directory, 'pi-custom')
+        const customOmp = await makeExecutable(directory, 'omp-custom')
 
-        expect(resolvePiCommand({ PATH: directory, HAPI_PI_PATH: custom })).toBe(custom)
-        expect(resolvePiCommand({ PATH: directory, HAPI_PI_PATH: '   ' })).toBe('pi')
-    })
-
-    it('keeps the canonical name when no Pi binary is on PATH', async () => {
-        const directory = await mkdtemp(join(tmpdir(), 'hapi-pi-path-'))
-
-        expect(resolvePiCommand({ PATH: directory })).toBe('pi')
-        expect(resolvePiCommand({ PATH: '' })).toBe('pi')
+        expect(resolvePiFamilyCommand('pi', { PATH: directory, HAPI_PI_PATH: customPi })).toBe(customPi)
+        expect(resolvePiFamilyCommand('omp', { PATH: directory, HAPI_OMP_PATH: customOmp })).toBe(customOmp)
+        expect(resolvePiFamilyCommand('pi', { PATH: directory, HAPI_PI_PATH: '   ' })).toBe('pi')
+        expect(resolvePiFamilyCommand('omp', { PATH: directory, HAPI_OMP_PATH: '   ' })).toBe('omp')
+        // An override for one flavor must not leak into the other.
+        expect(resolvePiFamilyCommand('omp', { PATH: directory, HAPI_PI_PATH: customPi })).toBe('omp')
     })
 })

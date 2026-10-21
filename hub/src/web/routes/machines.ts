@@ -237,8 +237,13 @@ export function createMachinesRoutes(getSyncEngine: () => SyncEngine | null): Ho
             return machine
         }
 
+        const requestedFlavor = c.req.query('flavor') ?? 'pi'
+        if (requestedFlavor !== 'pi' && requestedFlavor !== 'omp') {
+            return c.json({ success: false, error: 'Unknown Pi-family flavor' }, 400)
+        }
+
         try {
-            const result = await engine.listPiModelsForMachine(machineId)
+            const result = await engine.listPiModelsForMachine(machineId, requestedFlavor)
             return c.json(result)
         } catch (error) {
             if (error instanceof RpcTargetMissingError) {

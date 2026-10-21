@@ -44,6 +44,55 @@ describe('parsePiModelsProbeLine', () => {
         })
     })
 
+    it('derives thinkingLevelMap from OMP thinking.efforts', () => {
+        const result = parsePiModelsProbeLine(probeResponseLine({
+            models: [{
+                id: 'deepseek-v4.1-flash',
+                provider: 'local',
+                name: 'DeepSeek V4.1 Flash',
+                reasoning: true,
+                thinking: { mode: 'effort', efforts: ['low', 'high', 'max'], defaultLevel: 'high' },
+            }],
+        }))
+        expect(result).toEqual({
+            kind: 'models',
+            models: [{
+                provider: 'local',
+                modelId: 'deepseek-v4.1-flash',
+                name: 'DeepSeek V4.1 Flash',
+                reasoning: true,
+                thinkingLevelMap: {
+                    off: 'off',
+                    minimal: null,
+                    low: 'low',
+                    medium: null,
+                    high: 'high',
+                    xhigh: null,
+                    max: 'max',
+                },
+            }],
+        })
+    })
+
+    it('prefers an explicit thinkingLevelMap over OMP efforts', () => {
+        const result = parsePiModelsProbeLine(probeResponseLine({
+            models: [{
+                id: 'dual',
+                provider: 'p',
+                thinkingLevelMap: { off: 'off', xhigh: 'high' },
+                thinking: { mode: 'effort', efforts: ['low', 'max'] },
+            }],
+        }))
+        expect(result).toEqual({
+            kind: 'models',
+            models: [{
+                provider: 'p',
+                modelId: 'dual',
+                thinkingLevelMap: { off: 'off', xhigh: 'high' },
+            }],
+        })
+    })
+
     it('ignores non-JSON lines and unrelated RPC traffic', () => {
         expect(parsePiModelsProbeLine('starting up...')).toBeNull()
         expect(parsePiModelsProbeLine('')).toBeNull()

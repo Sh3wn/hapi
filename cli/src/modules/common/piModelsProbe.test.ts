@@ -73,6 +73,20 @@ describe('runPiModelsProbe spawn', () => {
         cwdSpy.mockRestore()
     })
 
+    it('spawns the omp binary for the omp flavor', async () => {
+        killMock.mockResolvedValue(true)
+
+        const pending = listPiModelsForMachine('omp')
+        child.emitModelsResponse([{ id: 'm1', provider: 'p1' }])
+        await pending
+
+        expect(spawnMock).toHaveBeenCalledWith(
+            'omp',
+            expect.any(Array),
+            expect.any(Object),
+        )
+    })
+
     it('falls back to home when the runner cwd is a filesystem root', async () => {
         // Under launchd/systemd the runner cwd is `/`, where a Pi startup that
         // loads extensions took 16.8s locally and blew the 15s timeout on every

@@ -9,7 +9,7 @@
  */
 
 import axios, { type AxiosInstance } from 'axios'
-import { extractAssistantPlainText, isObject } from '@hapi/protocol'
+import { extractAssistantPlainText, isObject, isPiFamilyFlavor } from '@hapi/protocol'
 import { normalizeSessionIdPrefix } from '@hapi/protocol/sessionCitation'
 import { configuration } from '@/configuration'
 import { getAuthToken } from '@/api/auth'
@@ -504,11 +504,11 @@ export async function pingPeer(options: PingPeerOptions): Promise<PingPeerResult
     }
 
     let live = await ensureActive('session went inactive before send; requesting resume...')
-    if (live.metadata?.flavor === 'pi') {
+    if (isPiFamilyFlavor(live.metadata?.flavor)) {
         await waitForPiReady(apiUrl, jwt, matched.id, waitActiveSecs, http, sleep, now, onProgress)
         const beforePiResume = resumed
         live = await ensureActive('session went inactive before send; requesting resume...')
-        if (resumed && !beforePiResume && live.metadata?.flavor === 'pi') {
+        if (resumed && !beforePiResume && isPiFamilyFlavor(live.metadata?.flavor)) {
             // Fresh agent after mid-wait resume: wait for piSessionId again (#1143).
             await waitForPiReady(apiUrl, jwt, matched.id, waitActiveSecs, http, sleep, now, onProgress)
             live = await ensureActive('session went inactive before send; requesting resume...')

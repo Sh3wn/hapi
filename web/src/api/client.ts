@@ -880,9 +880,9 @@ export class ApiClient {
         )
     }
 
-    async getMachinePiModels(machineId: string): Promise<PiModelsResponse> {
+    async getMachinePiModels(machineId: string, flavor: 'pi' | 'omp' = 'pi'): Promise<PiModelsResponse> {
         return await this.request<PiModelsResponse>(
-            `/api/machines/${encodeURIComponent(machineId)}/pi-models`
+            `/api/machines/${encodeURIComponent(machineId)}/pi-models?flavor=${flavor}`
         )
     }
 

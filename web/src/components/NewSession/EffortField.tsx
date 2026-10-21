@@ -1,4 +1,4 @@
-import { getAgentConfigDescriptor, type PiThinkingLevelMap } from '@hapi/protocol'
+import { getAgentConfigDescriptor, isPiFamilyFlavor, type PiThinkingLevelMap } from '@hapi/protocol'
 import { getPiThinkingLevelOptions } from '@/components/AssistantChat/piThinkingLevelOptions'
 import { getCodexComposerReasoningEffortOptions } from '@/components/AssistantChat/codexReasoningEffortOptions'
 import { useTranslation } from '@/lib/use-translation'
@@ -49,7 +49,7 @@ export function EffortField(props: EffortFieldProps) {
     let options: Array<{ value: string; label: string }>
     if (props.agent === 'grok') {
         options = props.grokOptions ?? GROK_EFFORT_OPTIONS
-    } else if (props.agent === 'pi') {
+    } else if (isPiFamilyFlavor(props.agent)) {
         if (props.piSelectedModel?.reasoning === false) {
             return null
         }

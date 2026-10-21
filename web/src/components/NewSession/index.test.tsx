@@ -331,6 +331,39 @@ describe('NewSession launch preferences', () => {
         savePreferredAgent('codex')
     })
 
+    it('offers OMP as its own Agent instead of marking Pi available', async () => {
+        savePreferredAgent('pi')
+        mocks.availableAgents.splice(
+            0,
+            mocks.availableAgents.length,
+            { agent: 'pi', available: false },
+            { agent: 'omp', available: true }
+        )
+        mocks.spawnSession.mockResolvedValue({ type: 'success', sessionId: 'omp-session' })
+
+        render(
+            <NewSession
+                api={api}
+                machines={[machine]}
+                initialMachineId="machine-1"
+                initialDirectory="C:\\repo"
+                onSuccess={mocks.onSuccess}
+                onCancel={() => {}}
+            />
+        )
+
+        await waitFor(() => expect(screen.getByDisplayValue('omp')).toBeChecked())
+        expect(screen.queryByDisplayValue('pi')).not.toBeInTheDocument()
+        expect(screen.getByLabelText('OMP')).toBeInTheDocument()
+
+        await waitFor(() => expect(screen.getByTestId('create')).toBeEnabled())
+        fireEvent.click(screen.getByTestId('create'))
+
+        await waitFor(() => expect(mocks.spawnSession).toHaveBeenCalledWith(
+            expect.objectContaining({ agent: 'omp' })
+        ))
+    })
+
     it('hides unavailable Agents and falls back to the first available Agent', async () => {
         savePreferredAgent('claude')
         mocks.availableAgents.splice(

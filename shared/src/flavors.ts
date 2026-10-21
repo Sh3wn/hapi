@@ -20,6 +20,7 @@ const FLAVOR_CAPS: Record<AgentFlavor, ReadonlySet<Capability>> = {
     dsh: new Set(),
     cursor: new Set([Capabilities.ModelChange]),
     opencode: new Set([Capabilities.ModelChange]),
+    omp: new Set([Capabilities.ModelChange, Capabilities.Effort]),
     pi: new Set([Capabilities.ModelChange, Capabilities.Effort]),
 }
 
@@ -35,6 +36,7 @@ const FLAVOR_LABELS: Record<AgentFlavor, string> = {
     dsh: 'DeepSeek Harness',
     cursor: 'Cursor',
     opencode: 'OpenCode',
+    omp: 'OMP',
     pi: 'Pi',
 }
 

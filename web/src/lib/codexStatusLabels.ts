@@ -1,3 +1,5 @@
+import { isPiFamilyFlavor } from '@hapi/protocol'
+
 /** Labels shared by SessionHeader and composer StatusBar for supported reasoning providers. */
 
 export function formatCompactReasoningLabel(effort?: string | null): string {
@@ -23,7 +25,7 @@ export function getReasoningEffortForFlavor(
     if (agentFlavor === 'codex' || agentFlavor === 'opencode') {
         return modelReasoningEffort?.trim() || null
     }
-    if (agentFlavor === 'pi') {
+    if (isPiFamilyFlavor(agentFlavor)) {
         return effort?.trim() || null
     }
     return null
@@ -36,7 +38,7 @@ export function shouldShowReasoningStatusLabel(
     // Codex/OpenCode retain their existing explicit default label when unset.
     if (agentFlavor === 'codex' || agentFlavor === 'opencode') return true
     // Pi has no meaningful default for non-reasoning models; only show a real level.
-    return agentFlavor === 'pi' && Boolean(reasoningEffort?.trim())
+    return isPiFamilyFlavor(agentFlavor) && Boolean(reasoningEffort?.trim())
 }
 
 /** Codex-only aliases retained for tool-card and thread call sites. */
